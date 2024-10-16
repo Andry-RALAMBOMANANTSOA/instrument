@@ -124,7 +124,7 @@ This project uses the following main dependencies:
 
 ## Related Repositories
 
-- **shared_struct**: Contains global structures that are utilized by the Instrument matching engine.
+- [**shared_struct**](https://github.com/Andry-RALAMBOMANANTSOA/shared_structs): Contains global structures that are utilized by the Instrument matching engine.
 
 ## Contributing
 
