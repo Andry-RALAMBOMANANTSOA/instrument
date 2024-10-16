@@ -1,0 +1,11 @@
+{
+    "market_specification": {
+      "RAVN_M_2025": {
+        "tick_size": 10,
+        "min_contract": 1,
+        "max_contract": 1000,
+        "iceberg_min_contract":500
+      }
+      
+    }
+  }

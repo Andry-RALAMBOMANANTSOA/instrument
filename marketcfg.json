@@ -1,0 +1,9 @@
+{
+    "exchange":"TTEMAC" ,
+    "market_name": "RAVN_M_2025",
+    "contract":100, 
+    "tick_size": 10,
+    "tick_value": 1000,
+    "quotation":"MGA"
+    
+  }
