@@ -1,10 +1,7 @@
 use std::env;
 
-pub struct AppConfig {
-    pub segment_broker: String,
-    pub broker_name: String,
-    pub mongo_uri: String,
-    pub db_kointakalo_clearing: String,
+pub struct CollConfig {
+   
     pub coll_h_lmtorder: String,
     pub coll_h_mktorder: String,
     pub coll_h_sorder: String,
@@ -41,22 +38,10 @@ pub struct AppConfig {
 
 }
 
-impl AppConfig {
+impl CollConfig {
     pub fn new() -> Self {
         Self {
-            segment_broker: env::var("SHMEM_BROKER").unwrap_or_else(|_| {
-                eprintln!("SHMEM_BROKER not set, using default value.");
-                std::process::exit(1);
-            }),
-            broker_name: env::var("BROKER_NAME").unwrap_or_else(|_| {
-                eprintln!("BROKER_NAME not set, using default value.");
-                std::process::exit(1);
-            }),
-            mongo_uri: env::var("MONGO_URI").expect("MONGO_URI not set"),
-            db_kointakalo_clearing: env::var("DB_CLEARING").unwrap_or_else(|_| {
-                eprintln!("DB_CLEARING not set, using default value.");
-                std::process::exit(1);
-            }),
+          
             coll_h_lmtorder: env::var("COLL_H_LMTORDER").unwrap_or_else(|_| {
                 eprintln!("COLL_H_LMTORDER not set, using default value.");
                 std::process::exit(1);
