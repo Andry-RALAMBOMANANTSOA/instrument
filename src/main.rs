@@ -2325,6 +2325,7 @@ thread::spawn({//Market
     let db1_market = Arc::clone(&db1_market);
     let connection_type_map = Arc::clone(&connection_type_map);
     let ws_connections = Arc::clone(&ws_connections);
+    let coll_config = Arc::clone(&coll_config);
     move || {  
 
     loop {
@@ -2335,16 +2336,11 @@ thread::spawn({//Market
                     let db1_market = Arc::clone(&db1_market);
                     let connection_type_map = Arc::clone(&connection_type_map);
                     let ws_connections = Arc::clone(&ws_connections);
+                    let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //Last
-                        let coll_h_last = match env::var("COLL_H_LAST") {
-                            Ok(name) => name,
-                            Err(err) => {
-                                eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
-                                return;  // Exit the task on error
-                            }
-                        };
                         
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_h_last, &msg).await {
+                        
+                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_last, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2383,17 +2379,10 @@ thread::spawn({//Market
                     let db1_market = Arc::clone(&db1_market);
                     let connection_type_map = Arc::clone(&connection_type_map);
                     let ws_connections = Arc::clone(&ws_connections);
+                    let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ // Mbpevent
-                        let coll_h_mbpevent = match env::var("COLL_H_MBP_EVENT") {
-                            Ok(name) => name,
-                            Err(err) => {
-                                eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
-                                return;  // Exit the task on error
-                            }
-                        };
-                           
-                        
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_h_mbpevent, &msg).await {
+                                               
+                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_mbpevent, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2430,17 +2419,10 @@ thread::spawn({//Market
                     let db1_market = Arc::clone(&db1_market);
                     let connection_type_map = Arc::clone(&connection_type_map);
                     let ws_connections = Arc::clone(&ws_connections);
+                    let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ // Interestevent
-                        let coll_h_interestevent = match env::var("COLL_H_INTEREST_EVENT") {
-                            Ok(name) => name,
-                            Err(err) => {
-                                eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
-                                return;  // Exit the task on error
-                            }
-                        };
-                           
-                        
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_h_interestevent, &msg).await {
+                       
+                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_interestevent, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2477,17 +2459,10 @@ thread::spawn({//Market
                     let db1_market = Arc::clone(&db1_market);
                     let connection_type_map = Arc::clone(&connection_type_map);
                     let ws_connections = Arc::clone(&ws_connections);
+                    let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //bbo
-                        let coll_h_bbo = match env::var("COLL_H_BBO") {
-                            Ok(name) => name,
-                            Err(err) => {
-                                eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
-                                return;  // Exit the task on error
-                            }
-                        };
-                           
-                        
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_h_bbo, &msg).await {
+                       
+                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_bbo, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2524,17 +2499,10 @@ thread::spawn({//Market
                     let db1_market = Arc::clone(&db1_market);
                     let connection_type_map = Arc::clone(&connection_type_map);
                     let ws_connections = Arc::clone(&ws_connections);
+                    let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //TNS
-                        let coll_h_tns = match env::var("COLL_H_TNS") {
-                            Ok(name) => name,
-                            Err(err) => {
-                                eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
-                                return;  // Exit the task on error
-                            }
-                        };
-                           
                        
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_h_tns, &msg).await {
+                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_tns, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2571,16 +2539,10 @@ thread::spawn({//Market
                     let db1_market = Arc::clone(&db1_market);
                     let connection_type_map = Arc::clone(&connection_type_map);
                     let ws_connections = Arc::clone(&ws_connections);
+                    let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //volume
-                        let coll_h_volume = match env::var("COLL_H_VOLUME") {
-                            Ok(name) => name,
-                            Err(err) => {
-                                eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
-                                return;  // Exit the task on error
-                            }
-                        };
-                           
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_h_volume, &msg).await {
+                       
+                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_volume, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2615,17 +2577,10 @@ thread::spawn({//Market
                 }
                 Structs::FullOB(msg) => {
                     let db1_market = Arc::clone(&db1_market);
+                    let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //fullob
-                        let coll_fullob = match env::var("COLL_FULL_OB") {
-                            Ok(name) => name,
-                            Err(err) => {
-                                eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
-                                return;  // Exit the task on error
-                            }
-                        };
-                           
                         
-                            if let Err(err) = overwrite_document(&db1_market, &coll_fullob, &msg).await {
+                            if let Err(err) = overwrite_document(&db1_market, &coll_config.coll_fullob, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }    
@@ -2635,17 +2590,10 @@ thread::spawn({//Market
                 }
                 Structs::FullInterest(msg) => {
                     let db1_market = Arc::clone(&db1_market);
+                    let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //fullinterest
-                        let coll_fullinterest = match env::var("COLL_FULL_INTEREST") {
-                            Ok(name) => name,
-                            Err(err) => {
-                                eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
-                                return;  // Exit the task on error
-                            }
-                        };
-                           
                         
-                            if let Err(err) = overwrite_document(&db1_market, &coll_fullinterest, &msg).await {
+                            if let Err(err) = overwrite_document(&db1_market, &coll_config.coll_fullinterest, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }    
@@ -8258,6 +8206,8 @@ thread::spawn({//Market
         let db2_market = Arc::clone(&db1_market);
         let ws_connections = Arc::clone(&ws_connections);
         let connection_type_map = Arc::clone(&connection_type_map);
+        let coll_config = Arc::clone(&coll_config);
+        let market_name = &config_clone_http.market_name;
         let cors = Cors::default()
             
             .allow_any_origin()
@@ -8276,33 +8226,32 @@ thread::spawn({//Market
             .app_data(web::Data::new(db2_market)) 
             .app_data(web::Data::new(ws_connections))
             .app_data(web::Data::new(connection_type_map))
-            .route(&format!("/order/limit_order/{}", config_clone_http.market_name), web::post().to(limit_order))
-            .route(&format!("/order/iceberg_order/{}", config_clone_http.market_name), web::post().to(iceberg_order))
-            .route(&format!("/order/market_order/{}", config_clone_http.market_name), web::post().to(market_order))
-            .route(&format!("/order/stop_order/{}", config_clone_http.market_name), web::post().to(stop_order))
-            .route(&format!("/order/stoplimit_order/{}", config_clone_http.market_name), web::post().to(stoplimit_order))
-            .route(&format!("/order/modify_order/{}", config_clone_http.market_name), web::post().to(modify_order))
-            .route(&format!("/order/modify_iceberg_order/{}", config_clone_http.market_name), web::post().to(modify_iceberg_order))
-            .route(&format!("/order/delete_order/{}", config_clone_http.market_name), web::post().to(delete_order))
-            .route(&format!("/order/delete_iceberg_order/{}", config_clone_http.market_name), web::post().to(delete_iceberg_order))
-            .route(&format!("/order/save/{}", config_clone_http.market_name), web::post().to(save))
-
-            .route(&format!("/history_last/{}", config_clone_http.market_name), web::post().to(history_last))
-            .route(&format!("/history_bbo/{}", config_clone_http.market_name), web::post().to(history_bbo))
-            .route(&format!("/history_tns/{}", config_clone_http.market_name), web::post().to(history_tns))
-            .route(&format!("/history_mbpevent/{}", config_clone_http.market_name), web::post().to(history_mbpevent))
-            .route(&format!("/history_volume/{}", config_clone_http.market_name), web::post().to(history_volume))
-            .route(&format!("/full_ob/{}", config_clone_http.market_name), web::get().to(full_ob_extractor))
-            .route(&format!("/full_interest/{}", config_clone_http.market_name), web::get().to(full_interest_extractor))
-            .route(&format!("/history_interestevent/{}", config_clone_http.market_name), web::post().to(history_interestevent))
-
-             // WebSocket routes
-             .route(&format!("/ws/last_rt/{}",config_clone_http.market_name), web::get().to(last_handler))
-             .route(&format!("/ws/mbp_event_rt/{}",config_clone_http.market_name), web::get().to(mbp_event_handler))
-             .route(&format!("/ws/best_bid_offer_rt/{}",config_clone_http.market_name), web::get().to(bbo_handler))
-             .route(&format!("/ws/volume_rt/{}",config_clone_http.market_name), web::get().to(volume_handler))
-             .route(&format!("/ws/time_sale_rt/{}",config_clone_http.market_name), web::get().to(tns_handler))
-             .route(&format!("/ws/interest_event_rt/{}",config_clone_http.market_name), web::get().to(interest_event_handler))
+            .app_data(web::Data::new(coll_config))
+            .route(&format!("/order/limit_order/{market_name}"), web::post().to(limit_order))
+            .route(&format!("/order/iceberg_order/{market_name}"), web::post().to(iceberg_order))
+            .route(&format!("/order/market_order/{market_name}"), web::post().to(market_order))
+            .route(&format!("/order/stop_order/{market_name}"), web::post().to(stop_order))
+            .route(&format!("/order/stoplimit_order/{market_name}"), web::post().to(stoplimit_order))
+            .route(&format!("/order/modify_order/{market_name}"), web::post().to(modify_order))
+            .route(&format!("/order/modify_iceberg_order/{market_name}"), web::post().to(modify_iceberg_order))
+            .route(&format!("/order/delete_order/{market_name}"), web::post().to(delete_order))
+            .route(&format!("/order/delete_iceberg_order/{market_name}"), web::post().to(delete_iceberg_order))
+            .route(&format!("/order/save/{market_name}"), web::post().to(save))
+            .route(&format!("/history_last/{market_name}"), web::post().to(history_last))
+            .route(&format!("/history_bbo/{market_name}"), web::post().to(history_bbo))
+            .route(&format!("/history_tns/{market_name}"), web::post().to(history_tns))
+            .route(&format!("/history_mbpevent/{market_name}"), web::post().to(history_mbpevent))
+            .route(&format!("/history_volume/{market_name}"), web::post().to(history_volume))
+            .route(&format!("/full_ob/{market_name}"), web::get().to(full_ob_extractor))
+            .route(&format!("/full_interest/{market_name}"), web::get().to(full_interest_extractor))
+            .route(&format!("/history_interestevent/{market_name}"), web::post().to(history_interestevent))
+            // WebSocket routes
+            .route(&format!("/ws/last_rt/{market_name}"), web::get().to(last_handler))
+            .route(&format!("/ws/mbp_event_rt/{market_name}"), web::get().to(mbp_event_handler))
+            .route(&format!("/ws/best_bid_offer_rt/{market_name}"), web::get().to(bbo_handler))
+            .route(&format!("/ws/volume_rt/{market_name}"), web::get().to(volume_handler))
+            .route(&format!("/ws/time_sale_rt/{market_name}"), web::get().to(tns_handler))
+            .route(&format!("/ws/interest_event_rt/{market_name}"), web::get().to(interest_event_handler))
     })
     .bind(server_url)?
     .run()

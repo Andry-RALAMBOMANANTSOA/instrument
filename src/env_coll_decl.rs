@@ -36,6 +36,15 @@ pub struct CollConfig {
     pub coll_h_pnl_w_cmmss: String,
     pub commission: i32,
 
+    pub coll_h_last: String,
+    pub coll_h_mbpevent: String,
+    pub coll_h_interestevent: String,
+    pub coll_h_bbo: String,
+    pub coll_h_tns: String,
+    pub coll_h_volume: String,
+    pub coll_fullob: String,
+    pub coll_fullinterest: String,
+
 }
 
 impl CollConfig {
@@ -233,6 +242,40 @@ impl CollConfig {
         .parse()
         .unwrap_or_else(|_| {
             eprintln!("COMMISSION is not a valid integer.");
+            std::process::exit(1);
+        }),
+
+        /////////////////////////////////////////
+        coll_h_last: env::var("COLL_H_LAST").unwrap_or_else(|_| {
+            eprintln!("COLL_H_LAST not set, using default value.");
+            std::process::exit(1);
+        }),
+        coll_h_mbpevent: env::var("COLL_H_MBP_EVENT").unwrap_or_else(|_| {
+            eprintln!("COLL_H_MBP_EVENT not set, using default value.");
+            std::process::exit(1);
+        }),
+        coll_h_interestevent: env::var("COLL_H_INTEREST_EVENT").unwrap_or_else(|_| {
+            eprintln!("COLL_H_INTEREST_EVENT not set, using default value.");
+            std::process::exit(1);
+        }),
+        coll_h_bbo: env::var("COLL_H_BBO").unwrap_or_else(|_| {
+            eprintln!("COLL_H_BBO not set, using default value.");
+            std::process::exit(1);
+        }),
+        coll_h_tns: env::var("COLL_H_TNS").unwrap_or_else(|_| {
+            eprintln!("COLL_H_TNS not set, using default value.");
+            std::process::exit(1);
+        }),
+        coll_h_volume: env::var("COLL_H_VOLUME").unwrap_or_else(|_| {
+            eprintln!("COLL_H_VOLUME not set, using default value.");
+            std::process::exit(1);
+        }),
+        coll_fullob: env::var("COLL_FULL_OB").unwrap_or_else(|_| {
+            eprintln!("COLL_FULL_OB not set, using default value.");
+            std::process::exit(1);
+        }),
+        coll_fullinterest: env::var("COLL_FULL_INTEREST").unwrap_or_else(|_| {
+            eprintln!("COLL_FULL_INTEREST not set, using default value.");
             std::process::exit(1);
         }),
         }

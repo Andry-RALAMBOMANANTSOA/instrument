@@ -3,6 +3,7 @@ use serde_json::json;
 use mongodb::{Database,bson::doc,bson,Collection};
 use tokio::sync::mpsc;
 use shared_structs::*;
+use crate::env_coll_decl::CollConfig;
 use crate::function::*;
 use std::sync::mpsc as sync_mpsc;
 use chrono::{DateTime, Utc, SecondsFormat,Duration,NaiveDateTime,Local,TimeZone};
@@ -508,9 +509,9 @@ pub async fn save(
 }
 
 
-pub async fn history_last(data: web::Json<Number>,db: web::Data<Database>)-> impl Responder {
+pub async fn history_last(data: web::Json<Number>,db: web::Data<Database>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
-    let coll_h_last = match env::var("COLL_H_LAST") {
+    /*let coll_h_last = match env::var("COLL_H_LAST") {
         Ok(name) => name,
         Err(err) => {
             eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
@@ -520,8 +521,8 @@ pub async fn history_last(data: web::Json<Number>,db: web::Data<Database>)-> imp
                
             }));
         }
-    };
-    match fetch_number_documents::<Last>(&db, &coll_h_last, data.number).await {
+    };*/
+    match fetch_number_documents::<Last>(&db, &coll_config.coll_h_last, data.number).await {
         Ok(documents) => HttpResponse::Ok().json(json!({
             "success": true,
             "data": documents,  // Return the documents as JSON
@@ -536,9 +537,9 @@ pub async fn history_last(data: web::Json<Number>,db: web::Data<Database>)-> imp
     }
    
 }
-pub async fn history_bbo(data: web::Json<Number>,db: web::Data<Database>) -> impl Responder{
+pub async fn history_bbo(data: web::Json<Number>,db: web::Data<Database>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
 
-    let coll_h_bbo = match env::var("COLL_H_BBO") {
+    /*let coll_h_bbo = match env::var("COLL_H_BBO") {
         Ok(name) => name,
         Err(err) => {
             eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
@@ -548,8 +549,8 @@ pub async fn history_bbo(data: web::Json<Number>,db: web::Data<Database>) -> imp
                
             }));
         }
-    };
-    match fetch_number_documents::<BBO>(&db, &coll_h_bbo, data.number).await {
+    };*/
+    match fetch_number_documents::<BBO>(&db, &coll_config.coll_h_bbo, data.number).await {
         Ok(documents) => HttpResponse::Ok().json(json!({
             "success": true,
             "data": documents,  // Return the documents as JSON
@@ -564,9 +565,9 @@ pub async fn history_bbo(data: web::Json<Number>,db: web::Data<Database>) -> imp
     }
    
 }
-pub async fn history_tns(data: web::Json<Number>,db: web::Data<Database>)-> impl Responder {
+pub async fn history_tns(data: web::Json<Number>,db: web::Data<Database>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
-    let coll_h_tns = match env::var("COLL_H_TNS") {
+   /* let coll_h_tns = match env::var("COLL_H_TNS") {
         Ok(name) => name,
         Err(err) => {
             eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
@@ -576,8 +577,8 @@ pub async fn history_tns(data: web::Json<Number>,db: web::Data<Database>)-> impl
                
             }));
         }
-    };
-    match fetch_number_documents::<TimeSale>(&db, &coll_h_tns, data.number).await {
+    };*/
+    match fetch_number_documents::<TimeSale>(&db, &coll_config.coll_h_tns, data.number).await {
         Ok(documents) => HttpResponse::Ok().json(json!({
             "success": true,
             "data": documents,  // Return the documents as JSON
@@ -593,9 +594,9 @@ pub async fn history_tns(data: web::Json<Number>,db: web::Data<Database>)-> impl
     
    
 }
-pub async fn history_mbpevent(data: web::Json<Number>,db: web::Data<Database>) -> impl Responder{
+pub async fn history_mbpevent(data: web::Json<Number>,db: web::Data<Database>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
 
-    let coll_h_mbp_event = match env::var("COLL_H_MBP_EVENT") {
+    /*let coll_h_mbp_event = match env::var("COLL_H_MBP_EVENT") {
         Ok(name) => name,
         Err(err) => {
             eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
@@ -605,8 +606,8 @@ pub async fn history_mbpevent(data: web::Json<Number>,db: web::Data<Database>) -
                
             }));
         }
-    };
-    match fetch_number_documents::<MBPEvents>(&db, &coll_h_mbp_event, data.number).await {
+    };*/
+    match fetch_number_documents::<MBPEvents>(&db, &coll_config.coll_h_mbpevent, data.number).await {
         Ok(documents) => HttpResponse::Ok().json(json!({
             "success": true,
             "data": documents,  // Return the documents as JSON
@@ -621,9 +622,9 @@ pub async fn history_mbpevent(data: web::Json<Number>,db: web::Data<Database>) -
     }
    
 }
-pub async fn history_interestevent(data: web::Json<Number>,db: web::Data<Database>) -> impl Responder{
+pub async fn history_interestevent(data: web::Json<Number>,db: web::Data<Database>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
 
-    let coll_h_interest_event = match env::var("COLL_H_INTEREST_EVENT") {
+    /*let coll_h_interest_event = match env::var("COLL_H_INTEREST_EVENT") {
         Ok(name) => name,
         Err(err) => {
             eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
@@ -633,8 +634,8 @@ pub async fn history_interestevent(data: web::Json<Number>,db: web::Data<Databas
                
             }));
         }
-    };
-    match fetch_number_documents::<InterestEvents>(&db, &coll_h_interest_event, data.number).await {
+    };*/
+    match fetch_number_documents::<InterestEvents>(&db, &coll_config.coll_h_interestevent, data.number).await {
         Ok(documents) => HttpResponse::Ok().json(json!({
             "success": true,
             "data": documents,  // Return the documents as JSON
@@ -649,9 +650,9 @@ pub async fn history_interestevent(data: web::Json<Number>,db: web::Data<Databas
     }
    
 }
-pub async fn history_volume(data: web::Json<Number>,db: web::Data<Database>)-> impl Responder {
+pub async fn history_volume(data: web::Json<Number>,db: web::Data<Database>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
-    let coll_h_volume = match env::var("COLL_H_VOLUME") {
+    /*let coll_h_volume = match env::var("COLL_H_VOLUME") {
         Ok(name) => name,
         Err(err) => {
             eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
@@ -661,8 +662,8 @@ pub async fn history_volume(data: web::Json<Number>,db: web::Data<Database>)-> i
                
             }));
         }
-    };
-    match fetch_number_documents::<Volume>(&db, &coll_h_volume, data.number).await {
+    };*/
+    match fetch_number_documents::<Volume>(&db, &coll_config.coll_h_volume, data.number).await {
         Ok(documents) => HttpResponse::Ok().json(json!({
             "success": true,
             "data": documents,  // Return the documents as JSON
@@ -677,9 +678,9 @@ pub async fn history_volume(data: web::Json<Number>,db: web::Data<Database>)-> i
     }
    
 }
-pub async fn full_ob_extractor(db: web::Data<Database>)-> impl Responder {
+pub async fn full_ob_extractor(db: web::Data<Database>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
-    let coll_full_ob = match env::var("COLL_FULL_OB") {
+    /*let coll_full_ob = match env::var("COLL_FULL_OB") {
         Ok(name) => name,
         Err(err) => {
             eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
@@ -689,8 +690,8 @@ pub async fn full_ob_extractor(db: web::Data<Database>)-> impl Responder {
                
             }));
         }
-    };
-    match fetch_one_document::<FullOB>(&db, &coll_full_ob).await {
+    };*/
+    match fetch_one_document::<FullOB>(&db, &coll_config.coll_fullob).await {
         Ok(documents) => HttpResponse::Ok().json(json!({
             "success": true,
             "data": documents,  // Return the documents as JSON
@@ -705,9 +706,9 @@ pub async fn full_ob_extractor(db: web::Data<Database>)-> impl Responder {
     }
    
 }
-pub async fn full_interest_extractor(db: web::Data<Database>)-> impl Responder {
+pub async fn full_interest_extractor(db: web::Data<Database>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
-    let coll_full_interest = match env::var("COLL_FULL_INTEREST") {
+    /*let coll_full_interest = match env::var("COLL_FULL_INTEREST") {
         Ok(name) => name,
         Err(err) => {
             eprintln!("COLLECTION_NAME_SENSITIVE_ERROR: {}", err);
@@ -717,8 +718,8 @@ pub async fn full_interest_extractor(db: web::Data<Database>)-> impl Responder {
                
             }));
         }
-    };
-    match fetch_one_document::<FullOB>(&db, &coll_full_interest).await {
+    };*/
+    match fetch_one_document::<FullOB>(&db, &coll_config.coll_fullinterest).await {
         Ok(documents) => HttpResponse::Ok().json(json!({
             "success": true,
             "data": documents,  // Return the documents as JSON
