@@ -9,14 +9,16 @@ use std::sync::mpsc as sync_mpsc;
 use shared_structs::*;
 mod websocket;
 use crate::websocket::*;
-use std::sync::Arc;
+use std::sync::{Arc,Mutex};
 use std::collections::BTreeMap;
 mod function;
 use std::time::Instant;
 mod handler;
 mod shared;
+mod dedic_structs;
 
 use crate::handler::*;
+use crate::dedic_structs::*;
 use crate::function::*;
 use std::thread;
 
@@ -45,13 +47,15 @@ let config =  read_marketconf( "./marketcfg.json")
 let db_name_market = env::var("DB_DATA_MARKET").expect("DB_DATA must be set");
 let client_options_market = ClientOptions::parse(&mongo_uri_market).await.expect("Failed to parse MongoDB URI");
 let client_market = Client::with_options(client_options_market).expect("Failed to initialize MongoDB client");
-let db_market = client_market.database(&db_name_market);
+let db_m = client_market.database(&db_name_market);
+let db_market = MarketDb { db: db_m };
  //DB Broker
  let mongo_uri_broker = env::var("MONGO_URI_BROKER").expect("MONGO_URI must be set");
 let db_name_broker = env::var("DB_DATA_BROKER").expect("DB_DATA must be set");
 let client_options_broker = ClientOptions::parse(&mongo_uri_broker).await.expect("Failed to parse MongoDB URI");
 let client_broker = Client::with_options(client_options_broker).expect("Failed to initialize MongoDB client");
-let db_broker = client_broker.database(&db_name_broker);
+let db_b = client_broker.database(&db_name_broker);
+let db_broker = BrokerDb { db: db_b };
 //////////////////////////////////////////////////////////////////
 let mut bid_struct = DashMap::<i64, TraderOrderStruct>::new();//key is order_identifier or maker id
     let mut bid_map: MAPData = MAPData { map:BTreeMap::new() };//key is price, value is vec of order identifier
@@ -87,16 +91,16 @@ let mut bid_struct = DashMap::<i64, TraderOrderStruct>::new();//key is order_ide
             bid_struct.insert(key, value);
         }
     }) {
-        eprintln!("Failed to load bid_struct: {}", e);
+        //eprintln!("Failed to load bid_struct: {}", e);
     }
 if let Err(e) = load_from_json_file("bid_map.json").map(|data: MAPData| { bid_map = data }) {
-    eprintln!("Failed to load bid_map or still inexistant: {}", e);
+   //eprintln!("Failed to load bid_map or still inexistant: {}", e);
 }
 if let Err(e) = load_from_json_file("bid_mbo.json").map(|data: MBOData| { bid_mbo = data }) {
-    eprintln!("Failed to load bid_mbo or still inexistant: {}", e);
+    //eprintln!("Failed to load bid_mbo or still inexistant: {}", e);
 }
 if let Err(e) = load_from_json_file("bid_mbp.json").map(|data: MBPData| { bid_mbp = data }) {
-    eprintln!("Failed to load bid_mbp or still inexistant: {}", e);
+    //eprintln!("Failed to load bid_mbp or still inexistant: {}", e);
 }
 
 // Similar loading for ask data
@@ -105,16 +109,16 @@ if let Err(e) = load_from_json_file::<BTreeMap<i64, TraderOrderStruct>>("ask_str
         ask_struct.insert(key, value);
     }
 }) {
-    eprintln!("Failed to load ask_struct: {}", e);
+    //eprintln!("Failed to load ask_struct: {}", e);
 }
 if let Err(e) = load_from_json_file("ask_map.json").map(|data: MAPData| { ask_map = data }) {
-    eprintln!("Failed to load ask_map or still inexistant: {}", e);
+    //eprintln!("Failed to load ask_map or still inexistant: {}", e);
 }
 if let Err(e) = load_from_json_file("ask_mbo.json").map(|data: MBOData| { ask_mbo = data }) {
-    eprintln!("Failed to load ask_mbo or still inexistant: {}", e);
+    //eprintln!("Failed to load ask_mbo or still inexistant: {}", e);
 }
 if let Err(e) = load_from_json_file("ask_mbp.json").map(|data: MBPData| { ask_mbp = data }) {
-    eprintln!("Failed to load ask_mbp or still inexistant: {}", e);
+    //eprintln!("Failed to load ask_mbp or still inexistant: {}", e);
 }
 
 // Load stop data
@@ -123,10 +127,10 @@ if let Err(e) = load_from_json_file::<BTreeMap<i64, TraderStopOrderStruct>>("sto
         stop_struct.insert(key, value);
     }
 }) {
-    eprintln!("Failed to load stop_struct or still inexistant: {}", e);
+    //eprintln!("Failed to load stop_struct or still inexistant: {}", e);
 }
 if let Err(e) = load_from_json_file("stop_map.json").map(|data: MAPStopData| { stop_map = data }) {
-    eprintln!("Failed to load stop_map or still inexistant: {}", e);
+    //eprintln!("Failed to load stop_map or still inexistant: {}", e);
 }
 
 // Load stop limit data
@@ -135,32 +139,32 @@ if let Err(e) = load_from_json_file::<BTreeMap<i64, TraderStopLimitOrderStruct>>
         stop_limit_struct.insert(key, value);
     }
 }) {
-    eprintln!("Failed to load stop_limit_struct or still inexistant: {}", e);
+    //eprintln!("Failed to load stop_limit_struct or still inexistant: {}", e);
 }
 if let Err(e) = load_from_json_file("stop_limit_map.json").map(|data: MAPStopLimitData| { stop_limit_map = data }) {
-    eprintln!("Failed to load stop_limit_map or still inexistant: {}", e);
+    //eprintln!("Failed to load stop_limit_map or still inexistant: {}", e);
 }
 
 // Load interest data
 if let Err(e) = load_from_json_file("long_tree.json").map(|data: InterestTree| { long_tree = data }) {
-    eprintln!("Failed to load long_tree or still inexistant: {}", e);
+    //eprintln!("Failed to load long_tree or still inexistant: {}", e);
 }
 if let Err(e) = load_from_json_file("short_tree.json").map(|data: InterestTree| { short_tree = data }) {
-    eprintln!("Failed to load short_tree or still inexistant: {}", e);
+    //eprintln!("Failed to load short_tree or still inexistant: {}", e);
 }
 if let Err(e) = load_from_json_file::<BTreeMap<i64, Vec<PositionStruct>>>("long_map.json").map(|data| { 
     for (key, value) in data {
         long_map.insert(key, value);
     }
 }) {
-    eprintln!("Failed to load long_map: {}", e);
+    //eprintln!("Failed to load long_map: {}", e);
 }
 if let Err(e) = load_from_json_file::<BTreeMap<i64, Vec<PositionStruct>>>("short_map.json").map(|data| { 
     for (key, value) in data {
         short_map.insert(key, value);
     }
 }) {
-    eprintln!("Failed to load short_map or still inexistant: {}", e);
+    //eprintln!("Failed to load short_map or still inexistant: {}", e);
 }
 
 // Load iceberg data
@@ -169,8 +173,9 @@ if let Err(e) = load_from_json_file::<BTreeMap<i64, IcebergOrderStruct>>("iceber
         iceberg_struct.insert(key, value);
     }
 }) {
-    eprintln!("Failed to load iceberg_struct or still inexistant: {}", e);
+    //eprintln!("Failed to load iceberg_struct or still inexistant: {}", e);
 }
+println!("Market {} is running!",config.market_name.clone());
 
 let mut last_dyn = Last {
     unix_time:0,
@@ -208,6 +213,16 @@ price: 0,
 pointing_at_maker:Some(0),
 pointing_at_taker:Some(0),
 };
+
+let mut bbo_http = Arc::new(Mutex::new(BBO {
+    unix_time: 0,            // Example initialization
+    market: config.market_name.clone(),
+    ask_price: None,
+    bid_price: None,
+    ask_size: None,
+    bid_size: None,
+}));
+let bbo_http_clone = Arc::clone(&bbo_http);  
     
 //let (tx_tokio, mut rx_tokio) = mpsc::unbounded_channel::<Structs>();
     //let tx_tokio = Arc::new(tx_tokio);
@@ -1810,7 +1825,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_lmtorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_lmtorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -1820,7 +1835,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_mktorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_mktorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -1830,7 +1845,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_sorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_sorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -1840,7 +1855,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_slorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_slorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -1850,7 +1865,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_modforder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modforder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -1860,7 +1875,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_dltorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -1870,7 +1885,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_p_order, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_p_order, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -1880,7 +1895,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_p_sorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_p_sorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -1890,7 +1905,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_p_slorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_p_slorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -1901,11 +1916,11 @@ thread::spawn({//Broker
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
                         let order_id = order.order_identifier;
-                            match insert_document_collection(&db1_broker, &coll_config.coll_h_dltd_order, &order).await {
+                            match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltd_order, &order).await {
                                 Ok(_) => {},
                                 Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                             };
-                            match delete_document_by_orderid(&db1_broker, &coll_config.coll_p_order, order_id).await {
+                            match delete_document_by_orderid(&db1_broker.db, &coll_config.coll_p_order, order_id).await {
                                 Ok(_) => println!("Successfully deleted LimitOrder"),
                                 Err(e) => eprintln!("Failed to delete LimitOrder: {:?}", e),
                             };
@@ -1916,11 +1931,11 @@ thread::spawn({//Broker
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
                         let order_id = order.order_identifier;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_dltd_sorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltd_sorder, &order).await {
                             Ok(_) =>{},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                        match delete_document_by_orderid(&db1_broker, &coll_config.coll_p_sorder, order_id).await {
+                        match delete_document_by_orderid(&db1_broker.db, &coll_config.coll_p_sorder, order_id).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to delete StopOrder: {:?}", e),
                         };
@@ -1931,11 +1946,11 @@ thread::spawn({//Broker
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
                         let order_id = order.order_identifier;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_dltd_slorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltd_slorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                        match delete_document_by_orderid(&db1_broker, &coll_config.coll_p_slorder, order_id).await {
+                        match delete_document_by_orderid(&db1_broker.db, &coll_config.coll_p_slorder, order_id).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to delete StopOrder: {:?}", e),
                         };
@@ -1947,11 +1962,11 @@ thread::spawn({//Broker
                     tokio::spawn(async move{
                         let order_id = order.order_identifier;
                         let order_quant = order.new_order_quantity;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_modfd_order, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modfd_order, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                        match modify_document_by_orderid(&db1_broker, &coll_config.coll_p_order, order_id,order_quant).await {
+                        match modify_document_by_orderid(&db1_broker.db, &coll_config.coll_p_order, order_id,order_quant).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
@@ -1963,11 +1978,11 @@ thread::spawn({//Broker
                     tokio::spawn(async move{
                         let order_id = order.order_identifier;
                         let order_quant = order.new_order_quantity;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_modfd_sorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modfd_sorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                        match modify_document_by_orderid(&db1_broker, &coll_config.coll_p_sorder, order_id,order_quant).await {
+                        match modify_document_by_orderid(&db1_broker.db, &coll_config.coll_p_sorder, order_id,order_quant).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
@@ -1979,11 +1994,11 @@ thread::spawn({//Broker
                     tokio::spawn(async move{
                         let order_id = order.order_identifier;
                         let order_quant = order.new_order_quantity;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_modfd_slorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modfd_slorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                        match modify_document_by_orderid(&db1_broker, &coll_config.coll_p_slorder, order_id,order_quant).await {
+                        match modify_document_by_orderid(&db1_broker.db, &coll_config.coll_p_slorder, order_id,order_quant).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
@@ -1993,7 +2008,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_t_message, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_t_message, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -2004,11 +2019,11 @@ thread::spawn({//Broker
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
                         let order_id = order.order_identifier;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_exctd_sorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_exctd_sorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                        match delete_document_by_orderid(&db1_broker, &coll_config.coll_p_sorder, order_id).await {
+                        match delete_document_by_orderid(&db1_broker.db, &coll_config.coll_p_sorder, order_id).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to delete StopOrder: {:?}", e),
                         };
@@ -2019,11 +2034,11 @@ thread::spawn({//Broker
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
                         let order_id = order.order_identifier;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_exctd_slorder, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_exctd_slorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                        match delete_document_by_orderid(&db1_broker, &coll_config.coll_p_slorder, order_id).await {
+                        match delete_document_by_orderid(&db1_broker.db, &coll_config.coll_p_slorder, order_id).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to delete StopOrder: {:?}", e),
                         };
@@ -2035,12 +2050,12 @@ thread::spawn({//Broker
                     tokio::spawn(async move{
                         let oid_maker = order.order_identifier_maker;
                             let quant = order.order_quantity;
-                            match insert_document_collection(&db1_broker, &coll_config.coll_h_match, &order).await {
+                            match insert_document_collection(&db1_broker.db, &coll_config.coll_h_match, &order).await {
                                 Ok(_) => {},
                                 Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                             };
                            
-                            let p_order: Result<TraderOrderStruct, String> = fetch_document_byorderid(&db1_broker, &coll_config.coll_p_order, oid_maker).await;
+                            let p_order: Result<TraderOrderStruct, String> = fetch_document_byorderid(&db1_broker.db, &coll_config.coll_p_order, oid_maker).await;
                             let p_order_s = match p_order {
                             Ok(user) => user, // Extract the user if the result is Ok
                             Err(err) => {
@@ -2052,17 +2067,17 @@ thread::spawn({//Broker
                            
 
                             if remaining_quantity == 0 {
-                                match delete_document_by_orderid(&db1_broker, &coll_config.coll_p_order, oid_maker).await {
+                                match delete_document_by_orderid(&db1_broker.db, &coll_config.coll_p_order, oid_maker).await {
                                     Ok(_) => {},
                                     Err(e) => eprintln!("Failed to delete limit Order: {:?}", e),
                                 };
                             } else if remaining_quantity > 0 {
-                                match modify_document_by_orderid(&db1_broker, &coll_config.coll_p_order, oid_maker,remaining_quantity).await {
+                                match modify_document_by_orderid(&db1_broker.db, &coll_config.coll_p_order, oid_maker,remaining_quantity).await {
                                     Ok(_) => {},
                                     Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                                 };
                             } else {
-                                match delete_document_by_orderid(&db1_broker, &coll_config.coll_p_order, oid_maker).await {
+                                match delete_document_by_orderid(&db1_broker.db, &coll_config.coll_p_order, oid_maker).await {
                                     Ok(_) => {},
                                     Err(e) => eprintln!("Failed to delete limit Order: {:?}", e),
                                 };
@@ -2073,7 +2088,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_dlticeberg, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dlticeberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert DeleteIcebergOrder: {:?}", e),
                         };
@@ -2084,11 +2099,11 @@ thread::spawn({//Broker
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
                         let id = order.iceberg_identifier;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_dltd_iceberg, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltd_iceberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert DeletedIcebergStruct: {:?}", e),
                         };
-                        match delete_iceberg_by_orderid(&db1_broker, &coll_config.coll_p_iceberg, id).await {
+                        match delete_iceberg_by_orderid(&db1_broker.db, &coll_config.coll_p_iceberg, id).await {
                             Ok(_) => println!("Successfully deleted LimitOrder"),
                             Err(e) => eprintln!("Failed to delete LimitOrder: {:?}", e),
                         };
@@ -2098,11 +2113,11 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_exctd_iceberg, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_exctd_iceberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert ExecutedIceberg: {:?}", e),
                         };
-                        let p_iceberg: Result<IcebergOrderStruct, String> = fetch_iceberg(&db1_broker, &coll_config.coll_p_iceberg, order.iceberg_identifier).await;
+                        let p_iceberg: Result<IcebergOrderStruct, String> = fetch_iceberg(&db1_broker.db, &coll_config.coll_p_iceberg, order.iceberg_identifier).await;
                             let p_iceberg_s = match p_iceberg {
                             Ok(user) => user, // Extract the user if the result is Ok
                             Err(err) => {
@@ -2114,17 +2129,17 @@ thread::spawn({//Broker
                            
 
                             if remaining_quantity == 0 {
-                                match delete_iceberg_by_orderid(&db1_broker, &coll_config.coll_p_iceberg, order.iceberg_identifier).await {
+                                match delete_iceberg_by_orderid(&db1_broker.db, &coll_config.coll_p_iceberg, order.iceberg_identifier).await {
                                     Ok(_) => {},
                                     Err(e) => eprintln!("Failed to delete iceberg Order: {:?}", e),
                                 };
                             } else if remaining_quantity > 0 {
-                                match update_iceberg_resting_by_orderid(&db1_broker, &coll_config.coll_p_iceberg, order.iceberg_identifier,remaining_quantity).await {
+                                match update_iceberg_resting_by_orderid(&db1_broker.db, &coll_config.coll_p_iceberg, order.iceberg_identifier,remaining_quantity).await {
                                     Ok(_) => {},
                                     Err(e) => eprintln!("Failed to update iceberg Order: {:?}", e),
                                 };
                             } else {
-                                match delete_iceberg_by_orderid(&db1_broker, &coll_config.coll_p_iceberg, order.iceberg_identifier).await {
+                                match delete_iceberg_by_orderid(&db1_broker.db, &coll_config.coll_p_iceberg, order.iceberg_identifier).await {
                                     Ok(_) => {},
                                     Err(e) => eprintln!("Failed to delete iceberg Order: {:?}", e),
                                 };
@@ -2135,7 +2150,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_iceberg, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_iceberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert IcebergOrder: {:?}", e),
                         };
@@ -2146,11 +2161,11 @@ thread::spawn({//Broker
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
                         let id = order.iceberg_identifier;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_modfd_iceberg, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modfd_iceberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert ModifiedIcebergStruct: {:?}", e),
                         };
-                        match modify_iceberg_by_orderid(&db1_broker, &coll_config.coll_p_iceberg, id,order.new_quantity,order.new_visible_quantity).await {
+                        match modify_iceberg_by_orderid(&db1_broker.db, &coll_config.coll_p_iceberg, id,order.new_quantity,order.new_visible_quantity).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
@@ -2160,7 +2175,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_modficeberg, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modficeberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert ModifyIcebergOrder: {:?}", e),
                         };
@@ -2170,7 +2185,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_p_iceberg, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_p_iceberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert IcebergOrderStruct: {:?}", e),
                         };
@@ -2180,7 +2195,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_a_position, &position).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_a_position, &position).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -2191,11 +2206,11 @@ thread::spawn({//Broker
                         };
                     
                         // Insert the PaidCommission into the coll_h_cmmss_paid collection
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_cmmss_paid, &paid_commission).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_cmmss_paid, &paid_commission).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert PaidCommission: {:?}", e),
                         };
-                        let balance: Result<TraderBalance, String> = fetch_document_traderid(&db1_broker, &coll_config.coll_trdr_bal, position.trader_identifier).await;
+                        let balance: Result<TraderBalance, String> = fetch_document_traderid(&db1_broker.db, &coll_config.coll_trdr_bal, position.trader_identifier).await;
                         let balance_s = match balance {
                         Ok(user) => user, // Extract the user if the result is Ok
                         Err(err) => {
@@ -2205,7 +2220,7 @@ thread::spawn({//Broker
                         };
                         let a_balance = balance_s.balance - coll_config.commission*position.position_quantity;
     
-                        match  update_balance_by_traderid(&db1_broker, &coll_config.coll_trdr_bal, position.trader_identifier,a_balance).await {
+                        match  update_balance_by_traderid(&db1_broker.db, &coll_config.coll_trdr_bal, position.trader_identifier,a_balance).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
@@ -2217,12 +2232,12 @@ thread::spawn({//Broker
                     tokio::spawn(async move{
                         let pos_id = position.position_identifier;
                         let pos_quant = position.position_quantity;
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_clsdpos, &position).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_clsdpos, &position).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
                        
-                        let a_position: Result<PositionStruct, String> = fetch_document_position(&db1_broker, &coll_config.coll_a_position, pos_id).await;
+                        let a_position: Result<PositionStruct, String> = fetch_document_position(&db1_broker.db, &coll_config.coll_a_position, pos_id).await;
                         let a_position_s = match a_position {
                         Ok(user) => user, // Extract the user if the result is Ok
                         Err(err) => {
@@ -2234,17 +2249,17 @@ thread::spawn({//Broker
                        
     
                         if remaining_quantity == 0 {
-                            match delete_document_by_posid(&db1_broker, &coll_config.coll_a_position, pos_id).await {
+                            match delete_document_by_posid(&db1_broker.db, &coll_config.coll_a_position, pos_id).await {
                                 Ok(_) => {},
                                 Err(e) => eprintln!("Failed to delete limit Order: {:?}", e),
                             };
                         } else if remaining_quantity > 0 {
-                            match modify_document_by_posid(&db1_broker, &coll_config.coll_a_position, pos_id,remaining_quantity).await {
+                            match modify_document_by_posid(&db1_broker.db, &coll_config.coll_a_position, pos_id,remaining_quantity).await {
                                 Ok(_) => {},
                                 Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                             };
                         } else {
-                            match delete_document_by_posid(&db1_broker, &coll_config.coll_a_position, pos_id).await {
+                            match delete_document_by_posid(&db1_broker.db, &coll_config.coll_a_position, pos_id).await {
                                 Ok(_) => {},
                                 Err(e) => eprintln!("Failed to delete limit Order: {:?}", e),
                             };
@@ -2256,11 +2271,11 @@ thread::spawn({//Broker
                         };
                     
                         // Insert the PaidCommission into the coll_h_cmmss_paid collection
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_cmmss_paid, &paid_commission).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_cmmss_paid, &paid_commission).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert PaidCommission: {:?}", e),
                         };
-                        let balance: Result<TraderBalance, String> = fetch_document_traderid(&db1_broker, &coll_config.coll_trdr_bal, position.trader_identifier).await;
+                        let balance: Result<TraderBalance, String> = fetch_document_traderid(&db1_broker.db, &coll_config.coll_trdr_bal, position.trader_identifier).await;
                         let balance_s = match balance {
                         Ok(user) => user, // Extract the user if the result is Ok
                         Err(err) => {
@@ -2270,7 +2285,7 @@ thread::spawn({//Broker
                         };
                         let a_balance = balance_s.balance - coll_config.commission*position.position_quantity;
     
-                        match  update_balance_by_traderid(&db1_broker, &coll_config.coll_trdr_bal, position.trader_identifier,a_balance).await {
+                        match  update_balance_by_traderid(&db1_broker.db, &coll_config.coll_trdr_bal, position.trader_identifier,a_balance).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
@@ -2280,7 +2295,7 @@ thread::spawn({//Broker
                     let db1_broker = Arc::clone(&db1_broker);
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_pnl_no_cmmss, &order).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_pnl_no_cmmss, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
@@ -2293,11 +2308,11 @@ thread::spawn({//Broker
                         };
     
                         // Insert into coll_h_pnl_w_cmmss
-                        match insert_document_collection(&db1_broker, &coll_config.coll_h_pnl_w_cmmss, &order_with_commission).await {
+                        match insert_document_collection(&db1_broker.db, &coll_config.coll_h_pnl_w_cmmss, &order_with_commission).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert PostTraderInf with commission: {:?}", e),
                         };
-                        let balance: Result<TraderBalance, String> = fetch_document_traderid(&db1_broker, &coll_config.coll_trdr_bal, order.trader_identifier).await;
+                        let balance: Result<TraderBalance, String> = fetch_document_traderid(&db1_broker.db, &coll_config.coll_trdr_bal, order.trader_identifier).await;
                         let balance_s = match balance {
                         Ok(user) => user, // Extract the user if the result is Ok
                         Err(err) => {
@@ -2307,7 +2322,7 @@ thread::spawn({//Broker
                         };
                         let a_balance = balance_s.balance + order.trader_calcbalance;
     
-                        match  update_balance_by_traderid(&db1_broker, &coll_config.coll_trdr_bal, order.trader_identifier,a_balance).await {
+                        match  update_balance_by_traderid(&db1_broker.db, &coll_config.coll_trdr_bal, order.trader_identifier,a_balance).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
@@ -2340,7 +2355,7 @@ thread::spawn({//Market
                     tokio::spawn(async move{ //Last
                         
                         
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_last, &msg).await {
+                            if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_last, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2382,7 +2397,7 @@ thread::spawn({//Market
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ // Mbpevent
                                                
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_mbpevent, &msg).await {
+                            if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_mbpevent, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2422,7 +2437,7 @@ thread::spawn({//Market
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ // Interestevent
                        
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_interestevent, &msg).await {
+                            if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_interestevent, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2462,7 +2477,7 @@ thread::spawn({//Market
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //bbo
                        
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_bbo, &msg).await {
+                            if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_bbo, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2502,7 +2517,7 @@ thread::spawn({//Market
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //TNS
                        
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_tns, &msg).await {
+                            if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_tns, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2542,7 +2557,7 @@ thread::spawn({//Market
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //volume
                        
-                            if let Err(err) = insert_document_collection(&db1_market, &coll_config.coll_h_volume, &msg).await {
+                            if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_volume, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }
@@ -2580,7 +2595,7 @@ thread::spawn({//Market
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //fullob
                         
-                            if let Err(err) = overwrite_document(&db1_market, &coll_config.coll_fullob, &msg).await {
+                            if let Err(err) = overwrite_document(&db1_market.db, &coll_config.coll_fullob, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }    
@@ -2593,7 +2608,7 @@ thread::spawn({//Market
                     let coll_config = Arc::clone(&coll_config);
                     tokio::spawn(async move{ //fullinterest
                         
-                            if let Err(err) = overwrite_document(&db1_market, &coll_config.coll_fullinterest, &msg).await {
+                            if let Err(err) = overwrite_document(&db1_market.db, &coll_config.coll_fullinterest, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }    
@@ -8123,10 +8138,21 @@ thread::spawn({//Market
                         
                     }
                     let dyn_bbo = struct_bbo(Utc::now().timestamp_micros(), &ask_mbp, &bid_mbp,&config);
+                    let bbo_http_clone = Arc::clone(&bbo_http);
+                    match bbo_http_clone.lock() {
+                        Ok(mut bbo_http_mut) => {
+                            *bbo_http_mut = dyn_bbo.clone(); // Update the data
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to lock the mutex for bbo_http: {:?}", e);
+                            return; // Or handle the error in a way that makes sense for your application
+                        }
+                    }
                     let bbo_message = Structs::BBO(dyn_bbo);
                     if let Err(e) = tx_market.send(bbo_message) {
                         eprintln!("Failed to send FullOB message: {:?}", e);
                     }
+                    
             
                 let fullob = full_ob(Utc::now().timestamp_micros(), &ask_mbp, &bid_mbp, &config);
                 let fullob_m = Structs::FullOB(fullob);
@@ -8204,10 +8230,12 @@ thread::spawn({//Market
        
     HttpServer::new(move || {
         let db2_market = Arc::clone(&db1_market);
+        let db2_broker = Arc::clone(&db1_broker);
         let ws_connections = Arc::clone(&ws_connections);
         let connection_type_map = Arc::clone(&connection_type_map);
         let coll_config = Arc::clone(&coll_config);
         let market_name = &config_clone_http.market_name;
+        let bbo_http = Arc::clone(&bbo_http_clone);
         let cors = Cors::default()
             
             .allow_any_origin()
@@ -8224,9 +8252,11 @@ thread::spawn({//Market
             .app_data(web::Data::new(config_clone_http.clone()))
             .app_data(web::Data::new(market_spec_config.clone()))
             .app_data(web::Data::new(db2_market)) 
+            .app_data(web::Data::new(db2_broker)) 
             .app_data(web::Data::new(ws_connections))
             .app_data(web::Data::new(connection_type_map))
             .app_data(web::Data::new(coll_config))
+            .app_data(web::Data::new(bbo_http))
             .route(&format!("/order/limit_order/{market_name}"), web::post().to(limit_order))
             .route(&format!("/order/iceberg_order/{market_name}"), web::post().to(iceberg_order))
             .route(&format!("/order/market_order/{market_name}"), web::post().to(market_order))

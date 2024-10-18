@@ -1774,6 +1774,42 @@ pub fn ex_iceberg(iceberg_struct: &mut DashMap<i64, IcebergOrderStruct>,order_id
             None => Err(format!("Document not found in collection '{}'", collection_name)),
         }
     }
+    pub async fn fetch_all_documents_by_trader_id<T>(
+        db: &Database,
+        collection_name: &str,
+        trader_id: i64,
+    ) -> Result<Vec<T>, String>
+    where
+        T: DeserializeOwned + Unpin + Debug + Send + Sync,
+    {
+        let collection = db.collection::<T>(collection_name);
+    
+        // Create a filter to match all documents with the specified trader_identifier
+        let filter = doc! { "trader_identifier": trader_id };
+    
+        // Use the find method to retrieve a cursor to the matching documents
+        let mut cursor = collection
+            .find(filter)
+            .await
+            .map_err(|err| format!("Failed to query the database: {}", err))?;
+    
+        // Collect the documents into a vector
+        let mut documents = Vec::new();
+        while let Some(result) = cursor.next().await {
+            match result {
+                Ok(doc) => documents.push(doc),
+                Err(err) => {
+                    return Err(format!("Error reading document from cursor: {}", err));
+                }
+            }
+        }
+    
+        if documents.is_empty() {
+            Err(format!("No documents found in collection '{}'", collection_name))
+        } else {
+            Ok(documents)
+        }
+    }
     pub async fn update_balance_by_traderid(
         db: &Database,
         collection_name: &str,

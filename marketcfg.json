@@ -4,6 +4,9 @@
     "contract":100, 
     "tick_size": 10,
     "tick_value": 1000,
+    "margin_perc":5,
+    "maintenance_margin_perc_for_margin_call":75,
+    "maintenance_margin_perc_with_margin":50,
     "quotation":"MGA"
     
   }
