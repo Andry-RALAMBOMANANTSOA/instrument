@@ -1793,7 +1793,7 @@ tokio::task::spawn_blocking(move || { //positioning
             full_interest(Utc::now().timestamp_micros(),&long_tree,&short_tree,&config_position,&txm2 );
         }
             
-            if last_save_time_position.elapsed().as_secs() >= 10 {
+            if last_save_time_position.elapsed().as_secs() >= 800 {
                 if let Err(e) = save_to_json_file(&long_tree, "long_tree.json") {
                     eprintln!("Failed to save long_tree: {}", e);
                 }
@@ -7351,7 +7351,7 @@ tokio::task::spawn_blocking(  move ||  { //order
         }
 
 
-if last_save_time.elapsed().as_secs() >= 10 {
+if last_save_time.elapsed().as_secs() >= 800 {
     // Save bid data
     if let Err(e) = save_to_json_file(&bid_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "bid_struct.json") {
         eprintln!("Failed to save bid_struct: {}", e);
@@ -7439,6 +7439,13 @@ tokio::task::spawn_blocking({//Market
                                     return;  // Continue to the next iteration if serialization fails
                                 }
                             };
+                            let msgpack_data = match rmp_serde::to_vec(&msg) {
+                                Ok(data) => data,
+                                Err(err) => {
+                                    eprintln!("MSGPACK_SERIALIZATION_FAILURE: {}", err);
+                                    return;  // Continue to the next iteration if serialization fails
+                                }
+                            };
                     
                             if let Some(session_ids) = connection_type_map.get(&ConnectionType::Last) {
                                 for session_id in session_ids.value().iter() {
@@ -7455,7 +7462,23 @@ tokio::task::spawn_blocking({//Market
                                         eprintln!("Session not found for ID: {}", session_id);
                                     }
                                 }
-                            }    
+                            }   
+                            if let Some(session_ids) = connection_type_map.get(&ConnectionType::LastMsgp) {
+                                for session_id in session_ids.value().iter() {
+                                    let session_id = session_id.clone();
+                                    // Retrieve the session from ws_connections using the session_id
+                                    if let Some(mut session) = ws_connections.get_mut(&session_id) {
+                                        let session = session.value_mut();
+                                        
+                                        // Send the message to the session
+                                        if let Err(e) = session.binary(msgpack_data.clone()).await {
+                                            eprintln!("Failed to send message to session {}: {:?}", session_id, e);
+                                        }
+                                    } else {
+                                        eprintln!("Session not found for ID: {}", session_id);
+                                    }
+                                }
+                            }   
                            
                         
                     });
@@ -7481,6 +7504,13 @@ tokio::task::spawn_blocking({//Market
                                     return;  // Continue to the next iteration if serialization fails
                                 }
                             };
+                            let msgpack_data = match rmp_serde::to_vec(&msg) {
+                                Ok(data) => data,
+                                Err(err) => {
+                                    eprintln!("MSGPACK_SERIALIZATION_FAILURE: {}", err);
+                                    return;  // Continue to the next iteration if serialization fails
+                                }
+                            };
                     
                             if let Some(session_ids) = connection_type_map.get(&ConnectionType::MbpEvent) {
                                 for session_id in session_ids.value().iter() {
@@ -7491,6 +7521,22 @@ tokio::task::spawn_blocking({//Market
                                         
                                         // Send the message to the session
                                         if let Err(e) = session.text(json_data.clone()).await {
+                                            eprintln!("Failed to send message to session {}: {:?}", session_id, e);
+                                        }
+                                    } else {
+                                        eprintln!("Session not found for ID: {}", session_id);
+                                    }
+                                }
+                            }  
+                            if let Some(session_ids) = connection_type_map.get(&ConnectionType::MbpEventMsgp) {
+                                for session_id in session_ids.value().iter() {
+                                    let session_id = session_id.clone();
+                                    // Retrieve the session from ws_connections using the session_id
+                                    if let Some(mut session) = ws_connections.get_mut(&session_id) {
+                                        let session = session.value_mut();
+                                        
+                                        // Send the message to the session
+                                        if let Err(e) = session.binary(msgpack_data.clone()).await {
                                             eprintln!("Failed to send message to session {}: {:?}", session_id, e);
                                         }
                                     } else {
@@ -7521,6 +7567,13 @@ tokio::task::spawn_blocking({//Market
                                     return;  // Continue to the next iteration if serialization fails
                                 }
                             };
+                            let msgpack_data = match rmp_serde::to_vec(&msg) {
+                                Ok(data) => data,
+                                Err(err) => {
+                                    eprintln!("MSGPACK_SERIALIZATION_FAILURE: {}", err);
+                                    return;  // Continue to the next iteration if serialization fails
+                                }
+                            };
                     
                             if let Some(session_ids) = connection_type_map.get(&ConnectionType::InterestEvent) {
                                 for session_id in session_ids.value().iter() {
@@ -7531,6 +7584,22 @@ tokio::task::spawn_blocking({//Market
                                         
                                         // Send the message to the session
                                         if let Err(e) = session.text(json_data.clone()).await {
+                                            eprintln!("Failed to send message to session {}: {:?}", session_id, e);
+                                        }
+                                    } else {
+                                        eprintln!("Session not found for ID: {}", session_id);
+                                    }
+                                }
+                            }  
+                            if let Some(session_ids) = connection_type_map.get(&ConnectionType::InterestEventMsgp) {
+                                for session_id in session_ids.value().iter() {
+                                    let session_id = session_id.clone();
+                                    // Retrieve the session from ws_connections using the session_id
+                                    if let Some(mut session) = ws_connections.get_mut(&session_id) {
+                                        let session = session.value_mut();
+                                        
+                                        // Send the message to the session
+                                        if let Err(e) = session.binary(msgpack_data.clone()).await {
                                             eprintln!("Failed to send message to session {}: {:?}", session_id, e);
                                         }
                                     } else {
@@ -7561,6 +7630,13 @@ tokio::task::spawn_blocking({//Market
                                     return;  // Continue to the next iteration if serialization fails
                                 }
                             };
+                            let msgpack_data = match rmp_serde::to_vec(&msg) {
+                                Ok(data) => data,
+                                Err(err) => {
+                                    eprintln!("MSGPACK_SERIALIZATION_FAILURE: {}", err);
+                                    return;  // Continue to the next iteration if serialization fails
+                                }
+                            };
                     
                             if let Some(session_ids) = connection_type_map.get(&ConnectionType::Nbbo) {
                                 for session_id in session_ids.value().iter() {
@@ -7578,6 +7654,22 @@ tokio::task::spawn_blocking({//Market
                                     }
                                 }
                             }  
+                            if let Some(session_ids) = connection_type_map.get(&ConnectionType::NbboMsgp) {
+                                for session_id in session_ids.value().iter() {
+                                    let session_id = session_id.clone();
+                                    // Retrieve the session from ws_connections using the session_id
+                                    if let Some(mut session) = ws_connections.get_mut(&session_id) {
+                                        let session = session.value_mut();
+                                        
+                                        // Send the message to the session
+                                        if let Err(e) = session.binary(msgpack_data.clone()).await {
+                                            eprintln!("Failed to send message to session {}: {:?}", session_id, e);
+                                        }
+                                    } else {
+                                        eprintln!("Session not found for ID: {}", session_id);
+                                    }
+                                }
+                            } 
                         
                     });
                 }
@@ -7601,6 +7693,13 @@ tokio::task::spawn_blocking({//Market
                                     return;  // Continue to the next iteration if serialization fails
                                 }
                             };
+                            let msgpack_data = match rmp_serde::to_vec(&msg) {
+                                Ok(data) => data,
+                                Err(err) => {
+                                    eprintln!("MSGPACK_SERIALIZATION_FAILURE: {}", err);
+                                    return;  // Continue to the next iteration if serialization fails
+                                }
+                            };
                     
                             if let Some(session_ids) = connection_type_map.get(&ConnectionType::Tns) {
                                 for session_id in session_ids.value().iter() {
@@ -7618,6 +7717,22 @@ tokio::task::spawn_blocking({//Market
                                     }
                                 }
                             }  
+                            if let Some(session_ids) = connection_type_map.get(&ConnectionType::TnsMsgp) {
+                                for session_id in session_ids.value().iter() {
+                                    let session_id = session_id.clone();
+                                    // Retrieve the session from ws_connections using the session_id
+                                    if let Some(mut session) = ws_connections.get_mut(&session_id) {
+                                        let session = session.value_mut();
+                                        
+                                        // Send the message to the session
+                                        if let Err(e) = session.binary(msgpack_data.clone()).await {
+                                            eprintln!("Failed to send message to session {}: {:?}", session_id, e);
+                                        }
+                                    } else {
+                                        eprintln!("Session not found for ID: {}", session_id);
+                                    }
+                                }
+                            }
                         
                     });
                 }
@@ -7641,6 +7756,13 @@ tokio::task::spawn_blocking({//Market
                                     return;  // Continue to the next iteration if serialization fails
                                 }
                             };
+                            let msgpack_data = match rmp_serde::to_vec(&msg) {
+                                Ok(data) => data,
+                                Err(err) => {
+                                    eprintln!("MSGPACK_SERIALIZATION_FAILURE: {}", err);
+                                    return;  // Continue to the next iteration if serialization fails
+                                }
+                            };
                     
                             if let Some(session_ids) = connection_type_map.get(&ConnectionType::Volume) {
                                 for session_id in session_ids.value().iter() {
@@ -7651,6 +7773,22 @@ tokio::task::spawn_blocking({//Market
                                         
                                         // Send the message to the session
                                         if let Err(e) = session.text(json_data.clone()).await {
+                                            eprintln!("Failed to send message to session {}: {:?}", session_id, e);
+                                        }
+                                    } else {
+                                        eprintln!("Session not found for ID: {}", session_id);
+                                    }
+                                }
+                            }  
+                            if let Some(session_ids) = connection_type_map.get(&ConnectionType::VolumeMsgp) {
+                                for session_id in session_ids.value().iter() {
+                                    let session_id = session_id.clone();
+                                    // Retrieve the session from ws_connections using the session_id
+                                    if let Some(mut session) = ws_connections.get_mut(&session_id) {
+                                        let session = session.value_mut();
+                                        
+                                        // Send the message to the session
+                                        if let Err(e) = session.binary(msgpack_data.clone()).await {
                                             eprintln!("Failed to send message to session {}: {:?}", session_id, e);
                                         }
                                     } else {
@@ -8260,6 +8398,18 @@ tokio::task::spawn_blocking({//Broker
             .route(&format!("/order/delete_order/{market_name}"), web::post().to(delete_order))
             .route(&format!("/order/delete_iceberg_order/{market_name}"), web::post().to(delete_iceberg_order))
             .route(&format!("/order/save/{market_name}"), web::post().to(save))
+            // orders messagepack routes
+            .route(&format!("/order/limit_order/msgpack/{market_name}"), web::post().to(limit_order_msgp))
+            .route(&format!("/order/iceberg_order/msgpack/{market_name}"), web::post().to(iceberg_order_msgp))
+            .route(&format!("/order/market_order/msgpack/{market_name}"), web::post().to(market_order_msgp))
+            .route(&format!("/order/stop_order/msgpack/{market_name}"), web::post().to(stop_order_msgp))
+            .route(&format!("/order/stoplimit_order/msgpack/{market_name}"), web::post().to(stoplimit_order_msgp))
+            .route(&format!("/order/modify_order/msgpack/{market_name}"), web::post().to(modify_order_msgp))
+            .route(&format!("/order/modify_iceberg_order/msgpack/{market_name}"), web::post().to(modify_iceberg_order_msgp))
+            .route(&format!("/order/delete_order/msgpack/{market_name}"), web::post().to(delete_order_msgp))
+            .route(&format!("/order/delete_iceberg_order/msgpack/{market_name}"), web::post().to(delete_iceberg_order_msgp))
+            .route(&format!("/order/save/msgpack/{market_name}"), web::post().to(save_msgp))
+            // historical data routes
             .route(&format!("/history_last/{market_name}"), web::post().to(history_last))
             .route(&format!("/history_bbo/{market_name}"), web::post().to(history_bbo))
             .route(&format!("/history_tns/{market_name}"), web::post().to(history_tns))
@@ -8268,6 +8418,15 @@ tokio::task::spawn_blocking({//Broker
             .route(&format!("/full_ob/{market_name}"), web::get().to(full_ob_extractor))
             .route(&format!("/full_interest/{market_name}"), web::get().to(full_interest_extractor))
             .route(&format!("/history_interestevent/{market_name}"), web::post().to(history_interestevent))
+             // historical data messagepack routes
+             .route(&format!("/history_last/msgpack/{market_name}"), web::post().to(history_last_msgp))
+             .route(&format!("/history_bbo/msgpack/{market_name}"), web::post().to(history_bbo_msgp))
+             .route(&format!("/history_tns/msgpack/{market_name}"), web::post().to(history_tns_msgp))
+             .route(&format!("/history_mbpevent/msgpack/{market_name}"), web::post().to(history_mbpevent_msgp))
+             .route(&format!("/history_volume/msgpack/{market_name}"), web::post().to(history_volume_msgp))
+             .route(&format!("/full_ob/msgpack/{market_name}"), web::get().to(full_ob_extractor_msgp))
+             .route(&format!("/full_interest/msgpack/{market_name}"), web::get().to(full_interest_extractor_msgp))
+             .route(&format!("/history_interestevent/msgpack/{market_name}"), web::post().to(history_interestevent_msgp))
             // WebSocket routes
             .route(&format!("/ws/last_rt/{market_name}"), web::get().to(last_handler))
             .route(&format!("/ws/mbp_event_rt/{market_name}"), web::get().to(mbp_event_handler))
@@ -8275,6 +8434,13 @@ tokio::task::spawn_blocking({//Broker
             .route(&format!("/ws/volume_rt/{market_name}"), web::get().to(volume_handler))
             .route(&format!("/ws/time_sale_rt/{market_name}"), web::get().to(tns_handler))
             .route(&format!("/ws/interest_event_rt/{market_name}"), web::get().to(interest_event_handler))
+            // WebSocket routes messagepack
+            .route(&format!("/ws/last_rt/msgpack/{market_name}"), web::get().to(last_handler_msgp))
+            .route(&format!("/ws/mbp_event_rt/msgpack/{market_name}"), web::get().to(mbp_event_handler_msgp))
+            .route(&format!("/ws/best_bid_offer_rt/msgpack/{market_name}"), web::get().to(bbo_handler_msgp))
+            .route(&format!("/ws/volume_rt/msgpack/{market_name}"), web::get().to(volume_handler_msgp))
+            .route(&format!("/ws/time_sale_rt/msgpack/{market_name}"), web::get().to(tns_handler_msgp))
+            .route(&format!("/ws/interest_event_rt/msgpack/{market_name}"), web::get().to(interest_event_handler_msgp))
     })
     .bind(server_url)?
     .run()

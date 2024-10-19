@@ -13,6 +13,12 @@ pub enum ConnectionType {
     Tns,
     Volume,
     InterestEvent,
+    LastMsgp,
+    MbpEventMsgp,
+    NbboMsgp,
+    TnsMsgp,
+    VolumeMsgp,
+    InterestEventMsgp,
    
 }
 

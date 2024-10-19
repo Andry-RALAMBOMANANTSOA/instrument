@@ -72,6 +72,20 @@ pub fn verify_hmac(serialized_body: &Vec<u8>, received_hmac: &str, secret_key_na
     // Compare the HMAC sent by the client with the one we generate
     Ok(expected_hmac == received_hmac)
 }
+pub fn verify_hmac_json(json_body: &str, received_hmac: &str, secret_key_name: &str) -> Result<bool, Box<dyn Error>> {
+    // Get the secret key from the environment variable
+    let secret_key = std::env::var(secret_key_name)?;
+    let secret_key_bytes = secret_key.as_bytes();
+
+    let mut mac = HmacSha256::new_from_slice(secret_key_bytes)
+        .map_err(|_| "Invalid key length")?;
+    mac.update(json_body.as_bytes());
+    let result = mac.finalize();
+    let expected_hmac = hex::encode(result.into_bytes());
+
+    // Compare the HMAC sent by the client with the one we generate
+    Ok(expected_hmac == received_hmac)
+}
 
 pub fn validate_limit_order(order: &LimitOrder) -> Result<(), String> {
     // Check if numeric fields are non-zero

@@ -232,5 +232,103 @@ pub async fn volume_handler(req: HttpRequest, stream: web::Payload,  ws_connecti
 }
 
 
+////MessagePack handler
 
+pub async fn last_handler_msgp(
+    req: HttpRequest,
+    stream: web::Payload,
+    ws_connections: web::Data<WsConnections>,
+    connection_type_map: web::Data<ConnectionTypeMap>,
+) -> Result<HttpResponse, Error> {
+    let (res, session, stream) = handle(&req, stream)?;
+    let aggregated_stream = stream.aggregate_continuations().max_continuation_size(2_usize.pow(20));
+
+    let ws = WSConnection {
+        connection_type: ConnectionType::LastMsgp,
+        ws_connections: ws_connections.get_ref().clone(),
+        connection_type_map: connection_type_map.get_ref().clone(),
+       
+    };
+
+    actix_web::rt::spawn(ws.handle_ws(session, aggregated_stream));
+    Ok(res)
+}
+
+// Handler for MBP event WebSocket
+pub async fn mbp_event_handler_msgp(req: HttpRequest, stream: web::Payload, ws_connections: web::Data<WsConnections>,
+    connection_type_map: web::Data<ConnectionTypeMap>,) -> Result<HttpResponse, Error> {
+    let (res, session, stream) = handle(&req, stream)?;
+    let aggregated_stream = stream.aggregate_continuations().max_continuation_size(2_usize.pow(20));
+
+    let ws = WSConnection {
+        connection_type: ConnectionType::MbpEventMsgp,
+        ws_connections: ws_connections.get_ref().clone(),
+        connection_type_map: connection_type_map.get_ref().clone(),
+    };
+
+    actix_web::rt::spawn(ws.handle_ws(session, aggregated_stream));
+    Ok(res)
+}
+pub async fn interest_event_handler_msgp(req: HttpRequest, stream: web::Payload, ws_connections: web::Data<WsConnections>,
+    connection_type_map: web::Data<ConnectionTypeMap>,) -> Result<HttpResponse, Error> {
+    let (res, session, stream) = handle(&req, stream)?;
+    let aggregated_stream = stream.aggregate_continuations().max_continuation_size(2_usize.pow(20));
+
+    let ws = WSConnection {
+        connection_type: ConnectionType::InterestEventMsgp,
+        ws_connections: ws_connections.get_ref().clone(),
+        connection_type_map: connection_type_map.get_ref().clone(),
+    };
+
+    actix_web::rt::spawn(ws.handle_ws(session, aggregated_stream));
+    Ok(res)
+}
+
+// Handler for BBO WebSocket
+pub async fn bbo_handler_msgp(req: HttpRequest, stream: web::Payload,  ws_connections: web::Data<WsConnections>,
+    connection_type_map: web::Data<ConnectionTypeMap>) -> Result<HttpResponse, Error> {
+    let (res, session, stream) = handle(&req, stream)?;
+    let aggregated_stream = stream.aggregate_continuations().max_continuation_size(2_usize.pow(20));
+
+    let ws = WSConnection {
+        connection_type: ConnectionType::NbboMsgp,
+        ws_connections: ws_connections.get_ref().clone(),
+        connection_type_map: connection_type_map.get_ref().clone(),
+    };
+
+    actix_web::rt::spawn(ws.handle_ws(session, aggregated_stream));
+    Ok(res)
+}
+
+// Handler for TNS WebSocket
+pub async fn tns_handler_msgp(req: HttpRequest, stream: web::Payload,  ws_connections: web::Data<WsConnections>,
+    connection_type_map: web::Data<ConnectionTypeMap>) -> Result<HttpResponse, Error> {
+    let (res, session, stream) = handle(&req, stream)?;
+    let aggregated_stream = stream.aggregate_continuations().max_continuation_size(2_usize.pow(20));
+
+    let ws = WSConnection {
+        connection_type: ConnectionType::TnsMsgp,
+        ws_connections: ws_connections.get_ref().clone(),
+        connection_type_map: connection_type_map.get_ref().clone(),
+    };
+
+    actix_web::rt::spawn(ws.handle_ws(session, aggregated_stream));
+    Ok(res)
+}
+
+// Handler for volume WebSocket
+pub async fn volume_handler_msgp(req: HttpRequest, stream: web::Payload,  ws_connections: web::Data<WsConnections>,
+    connection_type_map: web::Data<ConnectionTypeMap>) -> Result<HttpResponse, Error> {
+    let (res, session, stream) = handle(&req, stream)?;
+    let aggregated_stream = stream.aggregate_continuations().max_continuation_size(2_usize.pow(20));
+
+    let ws = WSConnection {
+        connection_type: ConnectionType::VolumeMsgp,
+        ws_connections: ws_connections.get_ref().clone(),
+        connection_type_map: connection_type_map.get_ref().clone(),
+    };
+
+    actix_web::rt::spawn(ws.handle_ws(session, aggregated_stream));
+    Ok(res)
+}
 
