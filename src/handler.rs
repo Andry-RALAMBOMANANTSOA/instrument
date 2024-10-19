@@ -23,7 +23,7 @@ pub async fn limit_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: 
                 let body_vec = body.to_vec(); // Convert Bytes to Vec<u8>
     
                 // Deserialize the body to extract the broker identifier
-                match rmp_serde::from_slice::<LimitOrder>(&body_vec) {
+                match serde_json::from_slice::<LimitOrder>(&body_vec) {
                     Ok(limit_order) => {
                         // Lookup the broker's HMAC key in the broker config
                         if let Some(hmac_key) = broker_config.broker_list.get(&limit_order.broker_identifier) {
@@ -1192,7 +1192,7 @@ pub async fn delete_iceberg_order(broker_db: web::Data<BrokerDb>,req: HttpReques
         }
 }
 
-pub async fn save(
+/*pub async fn save(
     _req: HttpRequest, // Removed HMAC header handling
     body: web::Bytes,
     tx: web::Data<Arc<mpsc::UnboundedSender<Structs>>>,
@@ -1201,7 +1201,7 @@ pub async fn save(
     let body_vec = body.to_vec(); // Convert Bytes to Vec<u8>
 
     // Deserialize the body to extract the broker identifier
-    match rmp_serde::from_slice::<Save>(&body_vec) {
+    match serde_json::from_slice::<Save>(&body_vec) {
         Ok(save) => {
             // Check if the market exists in the market list
             if save.market != market_conf.market_name {
@@ -1215,8 +1215,25 @@ pub async fn save(
         }
         Err(_) => HttpResponse::BadRequest().body("Failed to deserialize MessagePack"),
     }
-}
+}*/
+pub async fn save(
+    _req: HttpRequest,
+    save: web::Json<Save>, // Use web::Json to automatically deserialize JSON
+    tx: web::Data<sync_mpsc::Sender<Structs>>,
+    market_conf: web::Data<MarketConf>,
+) -> impl Responder {
+    // Check if the market exists in the market list
+    if save.market != market_conf.market_name {
+        return HttpResponse::BadRequest().body("Wrong market!");
+    }
 
+    // Send the struct to the channel
+    if let Err(_) = tx.send(Structs::Save(save.into_inner())) {
+        return HttpResponse::InternalServerError().body("Failed to send order");
+    }
+
+    HttpResponse::Ok().body("JSON body deserialized successfully and sent to the channel")
+}
 
 pub async fn history_last(data: web::Json<Number>,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
