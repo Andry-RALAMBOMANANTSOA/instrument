@@ -7340,13 +7340,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
         
-            let fullob = full_ob(Utc::now().timestamp_micros(), &ask_mbp, &bid_mbp, &config);
-            let fullob_m = Structs::FullOB(fullob);
-        
-            // Send the full order book message
-            if let Err(e) = tx_market.send(fullob_m) {
-                eprintln!("Failed to send FullOB message: {:?}", e);
-            }
+             full_ob(Utc::now().timestamp_micros(), &ask_mbp, &bid_mbp, &config,&tx_market);
+            
            
         }
 
@@ -8222,6 +8217,8 @@ tokio::task::spawn_blocking({//Broker
                         };
                         let paid_commission = PaidCommission {
                             unix_time: position.unix_time,
+                            broker_identifier:position.broker_identifier.clone(),
+                            trader_identifier:position.trader_identifier,
                             commission_amount: coll_config.commission*position.position_quantity, // Assuming the commission value is fetched from the .env file as shown earlier
                             c_type: "Opening".to_string(),
                         };
@@ -8287,6 +8284,8 @@ tokio::task::spawn_blocking({//Broker
                         }
                         let paid_commission = PaidCommission {
                             unix_time: position.unix_time,
+                            broker_identifier:position.broker_identifier.clone(),
+                            trader_identifier:position.trader_identifier,
                             commission_amount: coll_config.commission*position.position_quantity, // Assuming the commission value is fetched from the .env file as shown earlier
                             c_type: "Closing".to_string(),
                         };

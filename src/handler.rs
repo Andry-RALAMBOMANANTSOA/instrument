@@ -12,18 +12,20 @@ use std::sync::{Arc,Mutex};
 use std::{default, env};
 use crate::dedic_structs::*;
 
-pub async fn limit_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: web::Json<LimitOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn limit_order(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, data: web::Json<LimitOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
         let db: &Database = &broker_db.db;
-        let received_hmac = req.headers().get("X-HMAC-SIGNATURE");
+        let received_hmac = match req.headers().get("X-HMAC-SIGNATURE") {
+            Some(hmac_value) => match hmac_value.to_str() {
+                Ok(hmac_str) => hmac_str,
+                Err(_) => return HttpResponse::BadRequest().body("Invalid HMAC signature format"),
+            },
+            None => return HttpResponse::BadRequest().body("HMAC signature missing"),
+        };
         let limit_order = data.clone();
-    
-        if let Some(hmac_value) = received_hmac {
-            if let Ok(hmac_str) = hmac_value.to_str() {
-               
-    
+ 
                 // Deserialize the body to extract the broker identifier
                 
                         // Lookup the broker's HMAC key in the broker config
@@ -149,13 +151,13 @@ pub async fn limit_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: 
                                 Ok(body) => body,
                                 Err(_) => return HttpResponse::InternalServerError().body("Failed to serialize data to JSON"),
                             };
-                            match verify_hmac_json(&json_body, hmac_str, hmac_key) {
+                            match verify_hmac_json(&json_body, received_hmac, hmac_key) {
                                 Ok(true) => {
 
                                     if let Err(_) = tx.send(Structs::LimitOrder(data.into_inner())) {
                                         return HttpResponse::InternalServerError().body("Failed to send order");
                                     }
-                                    return HttpResponse::Ok().body("HMAC verified and body deserialized successfully");
+                                    return HttpResponse::Ok().body("Order entered to market.");
                                 }
                                 Ok(false) => return HttpResponse::Unauthorized().body("Invalid HMAC signature"),
                                 Err(_) => return HttpResponse::BadRequest().body("HMAC verification failed"),
@@ -165,15 +167,10 @@ pub async fn limit_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: 
                         }
                     
                     
-            } else {
-                return HttpResponse::BadRequest().body("Invalid HMAC header");
-            }
-        } else {
-            return HttpResponse::BadRequest().body("No HMAC signature provided");
-        }
+          
 }
 
-pub async fn market_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: web::Json<MarketOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn market_order(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, data: web::Json<MarketOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,bbo:web::Data<Arc<Mutex<BBO>>>) -> impl Responder {
@@ -387,7 +384,7 @@ pub async fn market_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data:
         }
 }
 
-pub async fn stop_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: web::Json<StopOrder>,tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn stop_order(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, data: web::Json<StopOrder>,tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -541,7 +538,7 @@ pub async fn stop_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: w
         }
 }
 
-pub async fn stoplimit_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: web::Json<StopLimitOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn stoplimit_order(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, data: web::Json<StopLimitOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -695,7 +692,7 @@ pub async fn stoplimit_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, da
         }
 }
 
-pub async fn modify_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: web::Json<ModifyOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn modify_order(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, data: web::Json<ModifyOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -839,7 +836,7 @@ pub async fn modify_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data:
         }
 }
 
-pub async fn delete_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: web::Json<DeleteOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn delete_order(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, data: web::Json<DeleteOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
         let db: &Database = &broker_db.db;
@@ -917,7 +914,7 @@ pub async fn delete_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data:
         }
 }
 
-pub async fn iceberg_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: web::Json<IcebergOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn iceberg_order(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, data: web::Json<IcebergOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -1054,7 +1051,7 @@ pub async fn iceberg_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data
         }
 }
 
-pub async fn modify_iceberg_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: web::Json<ModifyIcebergOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn modify_iceberg_order(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, data: web::Json<ModifyIcebergOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -1138,7 +1135,7 @@ pub async fn modify_iceberg_order(broker_db: web::Data<BrokerDb>,req: HttpReques
         }
 }
 
-pub async fn delete_iceberg_order(broker_db: web::Data<BrokerDb>,req: HttpRequest, data: web::Json<DeleteIcebergOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn delete_iceberg_order(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, data: web::Json<DeleteIcebergOrder>, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
         let db: &Database = &broker_db.db;
@@ -1215,7 +1212,7 @@ pub async fn save(
 
 
 //Order messagepack handler
-pub async fn limit_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn limit_order_msgp(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -1374,7 +1371,7 @@ pub async fn limit_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, b
         }
 }
 
-pub async fn market_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn market_order_msgp(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,bbo:web::Data<Arc<Mutex<BBO>>>) -> impl Responder {
@@ -1589,7 +1586,7 @@ pub async fn market_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, 
         }
 }
 
-pub async fn stop_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: web::Bytes,tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn stop_order_msgp(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, body: web::Bytes,tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -1743,7 +1740,7 @@ pub async fn stop_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, bo
         }
 }
 
-pub async fn stoplimit_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn stoplimit_order_msgp(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -1897,7 +1894,7 @@ pub async fn stoplimit_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpReques
         }
 }
 
-pub async fn modify_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn modify_order_msgp(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -2041,7 +2038,7 @@ pub async fn modify_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, 
         }
 }
 
-pub async fn delete_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn delete_order_msgp(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
         let db: &Database = &broker_db.db;
@@ -2119,7 +2116,7 @@ pub async fn delete_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, 
         }
 }
 
-pub async fn iceberg_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn iceberg_order_msgp(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -2256,7 +2253,7 @@ pub async fn iceberg_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest,
         }
 }
 
-pub async fn modify_iceberg_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn modify_iceberg_order_msgp(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,
     market_spec_config: web::Data<MarketSpecConfig>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
@@ -2340,7 +2337,7 @@ pub async fn modify_iceberg_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpR
         }
 }
 
-pub async fn delete_iceberg_order_msgp(broker_db: web::Data<BrokerDb>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
+pub async fn delete_iceberg_order_msgp(broker_db: web::Data<Arc<BrokerDb>>,req: HttpRequest, body: web::Bytes, tx: web::Data<sync_mpsc::Sender<Structs>>,
     broker_config: web::Data<BrokerConfigDedicaced>,
     market_conf: web::Data<MarketConf>,coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder {
         let db: &Database = &broker_db.db;
@@ -2422,7 +2419,7 @@ pub async fn save_msgp(
 }
 
 
-pub async fn history_last(data: web::Json<Number>,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn history_last(data: web::Json<Number>,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
     /*let coll_h_last = match env::var("COLL_H_LAST") {
         Ok(name) => name,
@@ -2451,7 +2448,7 @@ pub async fn history_last(data: web::Json<Number>,market_db: web::Data<MarketDb>
     }
    
 }
-pub async fn history_bbo(data: web::Json<Number>,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
+pub async fn history_bbo(data: web::Json<Number>,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
 
     /*let coll_h_bbo = match env::var("COLL_H_BBO") {
         Ok(name) => name,
@@ -2480,7 +2477,7 @@ pub async fn history_bbo(data: web::Json<Number>,market_db: web::Data<MarketDb>,
     }
    
 }
-pub async fn history_tns(data: web::Json<Number>,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn history_tns(data: web::Json<Number>,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
    /* let coll_h_tns = match env::var("COLL_H_TNS") {
         Ok(name) => name,
@@ -2510,7 +2507,7 @@ pub async fn history_tns(data: web::Json<Number>,market_db: web::Data<MarketDb>,
     
    
 }
-pub async fn history_mbpevent(data: web::Json<Number>,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
+pub async fn history_mbpevent(data: web::Json<Number>,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
 
     /*let coll_h_mbp_event = match env::var("COLL_H_MBP_EVENT") {
         Ok(name) => name,
@@ -2539,7 +2536,7 @@ pub async fn history_mbpevent(data: web::Json<Number>,market_db: web::Data<Marke
     }
    
 }
-pub async fn history_interestevent(data: web::Json<Number>,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
+pub async fn history_interestevent(data: web::Json<Number>,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
 
     /*let coll_h_interest_event = match env::var("COLL_H_INTEREST_EVENT") {
         Ok(name) => name,
@@ -2568,7 +2565,7 @@ pub async fn history_interestevent(data: web::Json<Number>,market_db: web::Data<
     }
    
 }
-pub async fn history_volume(data: web::Json<Number>,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn history_volume(data: web::Json<Number>,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
     /*let coll_h_volume = match env::var("COLL_H_VOLUME") {
         Ok(name) => name,
@@ -2597,7 +2594,7 @@ pub async fn history_volume(data: web::Json<Number>,market_db: web::Data<MarketD
     }
    
 }
-pub async fn full_ob_extractor(market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn full_ob_extractor(market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
     /*let coll_full_ob = match env::var("COLL_FULL_OB") {
         Ok(name) => name,
@@ -2626,7 +2623,7 @@ pub async fn full_ob_extractor(market_db: web::Data<MarketDb>, coll_config: web:
     }
    
 }
-pub async fn full_interest_extractor(market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn full_interest_extractor(market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
     /*let coll_full_interest = match env::var("COLL_FULL_INTEREST") {
         Ok(name) => name,
@@ -2657,7 +2654,7 @@ pub async fn full_interest_extractor(market_db: web::Data<MarketDb>, coll_config
 }  
 
 //Historical data handler messagepack
-pub async fn history_last_msgp(body: web::Bytes,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn history_last_msgp(body: web::Bytes,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
     let body_vec = body.to_vec(); // Convert Bytes to Vec<u8>
     let db: &Database = &market_db.db;
@@ -2685,7 +2682,7 @@ pub async fn history_last_msgp(body: web::Bytes,market_db: web::Data<MarketDb>, 
     }
    
 }
-pub async fn history_bbo_msgp(body: web::Bytes,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
+pub async fn history_bbo_msgp(body: web::Bytes,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
 
     let body_vec = body.to_vec(); // Convert Bytes to Vec<u8>
     let db: &Database = &market_db.db;
@@ -2713,7 +2710,7 @@ pub async fn history_bbo_msgp(body: web::Bytes,market_db: web::Data<MarketDb>, c
     }
    
 }
-pub async fn history_tns_msgp(body: web::Bytes,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn history_tns_msgp(body: web::Bytes,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
     let body_vec = body.to_vec(); // Convert Bytes to Vec<u8>
     let db: &Database = &market_db.db;
@@ -2742,7 +2739,7 @@ pub async fn history_tns_msgp(body: web::Bytes,market_db: web::Data<MarketDb>, c
     
    
 }
-pub async fn history_mbpevent_msgp(body: web::Bytes,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
+pub async fn history_mbpevent_msgp(body: web::Bytes,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
 
     let body_vec = body.to_vec(); // Convert Bytes to Vec<u8>
     let db: &Database = &market_db.db;
@@ -2770,7 +2767,7 @@ pub async fn history_mbpevent_msgp(body: web::Bytes,market_db: web::Data<MarketD
     }
    
 }
-pub async fn history_interestevent_msgp(body: web::Bytes,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
+pub async fn history_interestevent_msgp(body: web::Bytes,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,) -> impl Responder{
 
     let body_vec = body.to_vec(); // Convert Bytes to Vec<u8>
     let db: &Database = &market_db.db;
@@ -2798,7 +2795,7 @@ pub async fn history_interestevent_msgp(body: web::Bytes,market_db: web::Data<Ma
     }
    
 }
-pub async fn history_volume_msgp(body: web::Bytes,market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn history_volume_msgp(body: web::Bytes,market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
     let body_vec = body.to_vec(); // Convert Bytes to Vec<u8>
     let db: &Database = &market_db.db;
@@ -2826,7 +2823,7 @@ pub async fn history_volume_msgp(body: web::Bytes,market_db: web::Data<MarketDb>
     }
    
 }
-pub async fn full_ob_extractor_msgp(market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn full_ob_extractor_msgp(market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
     
     let db: &Database = &market_db.db;
@@ -2850,7 +2847,7 @@ pub async fn full_ob_extractor_msgp(market_db: web::Data<MarketDb>, coll_config:
     }
    
 }
-pub async fn full_interest_extractor_msgp(market_db: web::Data<MarketDb>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
+pub async fn full_interest_extractor_msgp(market_db: web::Data<Arc<MarketDb>>, coll_config: web::Data<Arc<CollConfig>>,)-> impl Responder {
 
    
     let db: &Database = &market_db.db;

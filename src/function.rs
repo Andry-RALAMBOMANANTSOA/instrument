@@ -633,20 +633,44 @@ pub fn struct_bbo(unix_time: i64, ask_mbp: &MBPData, bid_mbp: &MBPData,config:&M
         bid_size,
     }
 }
-pub fn full_ob(unix_time: i64, ask_mbp: &MBPData, bid_mbp: &MBPData,config:&MarketConf) -> FullOB {
-    FullOB {
-        unix_time,
-        market:config.market_name.clone(),
-        bid:bid_mbp.clone(),
-        ask:ask_mbp.clone(),
-    }
+pub fn full_ob(unix_time: i64, ask_mbp: &MBPData, bid_mbp: &MBPData,config:&MarketConf,tx_market: &mpsc::Sender<Structs>) {
+    let bid_levels: Vec<PriceLevel> = bid_mbp
+    .mbp
+    .iter()
+    .map(|(price, quantity)| PriceLevel {
+        price: *price,
+        quantity: *quantity,
+    })
+    .collect();
+
+let ask_levels: Vec<PriceLevel> = ask_mbp
+    .mbp
+    .iter()
+    .map(|(price, quantity)| PriceLevel {
+        price: *price,
+        quantity: *quantity,
+    })
+    .collect();
+
+let event = FullOB {
+    unix_time,
+    market: config.market_name.clone(),
+    bid: bid_levels,
+    ask: ask_levels,
+};
+let event_message = Structs::FullOB(event);
+if let Err(e) = tx_market.send(event_message) {
+    eprintln!("Failed to send fullob via channel: {:?}", e);
+}
 }
 pub fn full_interest(unix_time: i64, long: &InterestTree, short: &InterestTree,config:&MarketConf,tx_market: &mpsc::Sender<Structs>) {
+    let long_levels = long.to_vec();
+    let short_levels = short.to_vec();
     let event = FullInterest {
         unix_time,
         market:config.market_name.clone(),
-        long:long.clone(),
-        short:short.clone(),
+        long: long_levels,
+        short: short_levels,
     };
     let event_message = Structs::FullInterest(event);
     if let Err(e) = tx_market.send(event_message) {
@@ -1819,7 +1843,7 @@ pub fn ex_iceberg(iceberg_struct: &mut DashMap<i64, IcebergOrderStruct>,order_id
         }
     
         if documents.is_empty() {
-            Err(format!("No documents found in collection '{}'", collection_name))
+           Ok( vec![])
         } else {
             Ok(documents)
         }
