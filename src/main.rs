@@ -91,7 +91,7 @@ let mut bid_struct = DashMap::<i64, TraderOrderStruct>::new();//key is order_ide
             bid_struct.insert(key, value);
         }
     }) {
-        //eprintln!("Failed to load bid_struct: {}", e);
+        eprintln!("Failed to load bid_struct: {}", e);
     }
 if let Err(e) = load_from_json_file("bid_map.json").map(|data: MAPData| { bid_map = data }) {
    //eprintln!("Failed to load bid_map or still inexistant: {}", e);
@@ -109,7 +109,7 @@ if let Err(e) = load_from_json_file::<BTreeMap<i64, TraderOrderStruct>>("ask_str
         ask_struct.insert(key, value);
     }
 }) {
-    //eprintln!("Failed to load ask_struct: {}", e);
+    eprintln!("Failed to load ask_struct: {}", e);
 }
 if let Err(e) = load_from_json_file("ask_map.json").map(|data: MAPData| { ask_map = data }) {
     //eprintln!("Failed to load ask_map or still inexistant: {}", e);
@@ -1780,10 +1780,10 @@ tokio::task::spawn_blocking(move || { //positioning
                     if let Err(e) = save_to_json_file(&short_tree, "short_tree.json") {
                         eprintln!("Failed to save short_tree: {}", e);
                     }
-                    if let Err(e) = save_to_json_file(&long_map.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "long_map.json") {
+                    if let Err(e) = save_to_json_file(&long_map.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "long_map.json") {
                         eprintln!("Failed to save long_map: {}", e);
                     }
-                    if let Err(e) = save_to_json_file(&short_map.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "short_map.json") {
+                    if let Err(e) = save_to_json_file(&short_map.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "short_map.json") {
                         eprintln!("Failed to save short_map: {}", e);
                     }
                     println!("Position map and tree manually saved");
@@ -1800,10 +1800,10 @@ tokio::task::spawn_blocking(move || { //positioning
                 if let Err(e) = save_to_json_file(&short_tree, "short_tree.json") {
                     eprintln!("Failed to save short_tree: {}", e);
                 }
-                if let Err(e) = save_to_json_file(&long_map.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "long_map.json") {
+                if let Err(e) = save_to_json_file(&long_map.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "long_map.json") {
                     eprintln!("Failed to save long_map: {}", e);
                 }
-                if let Err(e) = save_to_json_file(&short_map.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "short_map.json") {
+                if let Err(e) = save_to_json_file(&short_map.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "short_map.json") {
                     eprintln!("Failed to save short_map: {}", e);
                 }
                 println!("Position map and tree periodically saved");
@@ -7268,7 +7268,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                             eprintln!("Failed to send message: {:?}", e);
                         }
 
-                        if let Err(e) = save_to_json_file(&bid_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "bid_struct.json") {
+                        if let Err(e) = save_to_json_file(&bid_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "bid_struct.json") {
                             eprintln!("Failed to save bid_struct: {}", e);
                         }
                         if let Err(e) = save_to_json_file(&bid_map, "bid_map.json") {
@@ -7282,7 +7282,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                         }
                     
                         // Save ask data
-                        if let Err(e) = save_to_json_file(&ask_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "ask_struct.json") {
+                        if let Err(e) = save_to_json_file(&ask_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "ask_struct.json") {
                             eprintln!("Failed to save ask_struct: {}", e);
                         }
                         if let Err(e) = save_to_json_file(&ask_map, "ask_map.json") {
@@ -7296,7 +7296,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                         }
                     
                         // Save stop data
-                        if let Err(e) = save_to_json_file(&stop_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "stop_struct.json") {
+                        if let Err(e) = save_to_json_file(&stop_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "stop_struct.json") {
                             eprintln!("Failed to save stop_struct: {}", e);
                         }
                         if let Err(e) = save_to_json_file(&stop_map, "stop_map.json") {
@@ -7304,7 +7304,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                         }
                     
                         // Save stop limit data
-                        if let Err(e) = save_to_json_file(&stop_limit_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "stop_limit_struct.json") {
+                        if let Err(e) = save_to_json_file(&stop_limit_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "stop_limit_struct.json") {
                             eprintln!("Failed to save stop_limit_struct: {}", e);
                         }
                         if let Err(e) = save_to_json_file(&stop_limit_map, "stop_limit_map.json") {
@@ -7312,7 +7312,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                         }
                       
                         // Save iceberg data
-                        if let Err(e) = save_to_json_file(&iceberg_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "iceberg_struct.json") {
+                        if let Err(e) = save_to_json_file(&iceberg_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "iceberg_struct.json") {
                             eprintln!("Failed to save iceberg_struct: {}", e);
                         }
 
@@ -7348,7 +7348,7 @@ tokio::task::spawn_blocking(  move ||  { //order
 
 if last_save_time.elapsed().as_secs() >= 800 {
     // Save bid data
-    if let Err(e) = save_to_json_file(&bid_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "bid_struct.json") {
+    if let Err(e) = save_to_json_file(&bid_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "bid_struct.json") {
         eprintln!("Failed to save bid_struct: {}", e);
     }
     if let Err(e) = save_to_json_file(&bid_map, "bid_map.json") {
@@ -7362,7 +7362,7 @@ if last_save_time.elapsed().as_secs() >= 800 {
     }
 
     // Save ask data
-    if let Err(e) = save_to_json_file(&ask_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "ask_struct.json") {
+    if let Err(e) = save_to_json_file(&ask_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "ask_struct.json") {
         eprintln!("Failed to save ask_struct: {}", e);
     }
     if let Err(e) = save_to_json_file(&ask_map, "ask_map.json") {
@@ -7376,7 +7376,7 @@ if last_save_time.elapsed().as_secs() >= 800 {
     }
 
     // Save stop data
-    if let Err(e) = save_to_json_file(&stop_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "stop_struct.json") {
+    if let Err(e) = save_to_json_file(&stop_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "stop_struct.json") {
         eprintln!("Failed to save stop_struct: {}", e);
     }
     if let Err(e) = save_to_json_file(&stop_map, "stop_map.json") {
@@ -7384,7 +7384,7 @@ if last_save_time.elapsed().as_secs() >= 800 {
     }
 
     // Save stop limit data
-    if let Err(e) = save_to_json_file(&stop_limit_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "stop_limit_struct.json") {
+    if let Err(e) = save_to_json_file(&stop_limit_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "stop_limit_struct.json") {
         eprintln!("Failed to save stop_limit_struct: {}", e);
     }
     if let Err(e) = save_to_json_file(&stop_limit_map, "stop_limit_map.json") {
@@ -7392,7 +7392,7 @@ if last_save_time.elapsed().as_secs() >= 800 {
     }
   
     // Save iceberg data
-    if let Err(e) = save_to_json_file(&iceberg_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<Vec<_>>(), "iceberg_struct.json") {
+    if let Err(e) = save_to_json_file(&iceberg_struct.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect::<BTreeMap<_, _>>(), "iceberg_struct.json") {
         eprintln!("Failed to save iceberg_struct: {}", e);
     }
     println!("Regular map and tree periodically saved");
