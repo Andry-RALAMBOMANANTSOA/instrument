@@ -2,9 +2,9 @@
 
 ## Overview
 
-**Instrument** is a Rust-based matching engine designed for processing orders in agricultural futures markets. The project provides a REST API with WebSocket support using the Actix framework, allowing real-time interaction with market data and order processing. The system is highly configurable, enabling multiple instances of the matching engine to be run with different market configurations.
+**Instrument**  is a Rust-based matching engine specifically designed for agricultural futures markets. It employs a Central Limit Order Book (CLOB) model with a First-In-First-Out (FIFO) algorithm for order matching, supporting advanced order types and conditions. The project provides a REST API with WebSocket support, built using the Actix framework, enabling real-time interaction with market data and order processing. It is highly configurable, allowing multiple instances of the matching engine to run with distinct market configurations.
 
-This repository is intended to work alongside the **shared_struct** repository, which contains the global data structures used within the Instrument. These shared data structures ensure consistent data handling across different components of the matching engine.
+The system utilizes MessagePack for communication in software and High-Frequency Trading (HFT) environments, ensuring efficient data serialization. For web and browser-based interactions, JSON is used for compatibility. The project supports complex order types, such as iceberg orders, and multiple "time-in-force" conditions, including GTC (Good Till Cancelled), GTD (Good Till Date), FOK (Fill or Kill), and IOC (Immediate or Cancel).
 
 ## Ownership and Broker Integration
 
