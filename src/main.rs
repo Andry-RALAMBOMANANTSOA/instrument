@@ -20,7 +20,6 @@ mod dedic_structs;
 use crate::handler::*;
 use crate::dedic_structs::*;
 use crate::function::*;
-use std::thread;
 
 mod env_coll_decl;
 use env_coll_decl::CollConfig;
@@ -256,6 +255,7 @@ tokio::task::spawn_blocking(move || { //positioning
 
                     // Handle Taker Side based on position side
                     match trade.taker_position_side {
+                       
                         OrderSide::Long => {
                             // Check inside short_map for the trader_identifier_taker.
                             let mut is_empty = false;
@@ -7823,7 +7823,7 @@ tokio::task::spawn_blocking({//Market
 
                 _ => {} 
             }
-            thread::sleep(Duration::from_nanos(10));
+          
         }
     }
 }});
@@ -8352,7 +8352,7 @@ tokio::task::spawn_blocking({//Broker
                 _ => {} 
             }
            
-            thread::sleep(Duration::from_nanos(10));
+          
         } 
     }
 }});

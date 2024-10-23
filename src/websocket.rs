@@ -94,7 +94,7 @@ impl WSConnection {
 
                 // Check if 5 minutes have passed without receiving a ping
                 _ = ticker.tick() => {
-                    if last_ping.elapsed() > Duration::from_secs(60) {  // 5 minutes
+                    if last_ping.elapsed() > Duration::from_secs(300) {  // 5 minutes
                         println!("No ping received from client for 5 minutes, closing connection.");
                         self.ws_connections.remove(&session_id);
                         let mut is_session_empty = false;

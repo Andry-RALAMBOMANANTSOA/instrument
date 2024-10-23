@@ -1,5 +1,4 @@
-use serde::{Deserialize, Serialize};
-use mongodb::Database;
+
 #[derive(Clone)]
 pub struct MarketDb {
     pub db: mongodb::Database,

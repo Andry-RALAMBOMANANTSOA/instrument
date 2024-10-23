@@ -2637,7 +2637,7 @@ pub async fn full_interest_extractor(market_db: web::Data<Arc<MarketDb>>, coll_c
         }
     };*/
     let db: &Database = &market_db.db;
-    match fetch_one_document::<FullOB>(&db, &coll_config.coll_fullinterest).await {
+    match fetch_one_document::<FullInterest>(&db, &coll_config.coll_fullinterest).await {
         Ok(documents) => HttpResponse::Ok().json(json!({
             "success": true,
             "data": documents,  // Return the documents as JSON
