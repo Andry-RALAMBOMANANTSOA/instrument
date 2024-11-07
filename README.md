@@ -63,6 +63,18 @@ The following routes are available for order management and market data retrieva
 - `/order/delete_iceberg_order/{market_name}`: Delete iceberg orders
 - `/order/save/{market_name}`: Save orders to the database
 
+#### Order Management with messagepack format 
+
+- `/order/limit_order/msgpack/{market_name}`: Handle limit orders
+- `/order/iceberg_order/msgpack/{market_name}`: Handle iceberg orders
+- `/order/market_order/msgpack/{market_name}`: Handle market orders
+- `/order/stop_order/msgpack/{market_name}`: Handle stop orders
+- `/order/stoplimit_order/msgpack/{market_name}`: Handle stop-limit orders
+- `/order/modify_order/msgpack/{market_name}`: Modify existing orders
+- `/order/modify_iceberg_order/msgpack/{market_name}`: Modify iceberg orders
+- `/order/delete_order/msgpack/market_name}`: Delete orders
+- `/order/delete_iceberg_order/msgpack/{market_name}`: Delete iceberg orders
+
 #### Historical Data
 
 - `/history_last/{market_name}`: Retrieve last traded prices
@@ -74,6 +86,15 @@ The following routes are available for order management and market data retrieva
 - `/full_interest/{market_name}`: Retrieve full interest data
 - `/history_interestevent/{market_name}`: Retrieve historical interest events
 
+#### Historical Data with messagepack format
+
+- `/history_last/msgpack/{market_name}`: Retrieve last traded prices
+- `/history_bbo/msgpack/{market_name}`: Retrieve best bid and offer
+- `/history_tns/msgpack/{market_name}`: Retrieve trade and sales data
+- `/history_mbpevent/msgpack/{market_name}`: Retrieve market-by-price events
+- `/history_volume/msgpack/{market_name}`: Retrieve volume data
+- `/full_ob/msgpack/{market_name}`: Retrieve the full order book
+
 ### WebSocket Routes
 
 WebSocket routes allow real-time data streaming for connected clients:
@@ -84,6 +105,13 @@ WebSocket routes allow real-time data streaming for connected clients:
 - `/ws/volume_rt/{market_name}`: Real-time volume updates
 - `/ws/time_sale_rt/{market_name}`: Real-time time and sales data
 - `/ws/interest_event_rt/{market_name}`: Real-time interest events
+
+With messagepack format:
+- `/ws/last_rt/msgpack/{market_name}`: Real-time last traded prices
+- `/ws/mbp_event_rt/msgpack/{market_name}`: Real-time market-by-price events
+- `/ws/best_bid_offer_rt/msgpack/{market_name}`: Real-time best bid and offer
+- `/ws/volume_rt/msgpack/{market_name}`: Real-time volume updates
+- `/ws/time_sale_rt/msgpack/{market_name}`: Real-time time and sales data
 
 ## Usage
 
