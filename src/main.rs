@@ -176,11 +176,12 @@ if let Err(e) = load_from_json_file::<BTreeMap<i64, IcebergOrderStruct>>("iceber
 }
 println!("Market {} is running!",config.market_name.clone());
 
-let mut last_dyn = Last {
+let mut last_dyn = Arc::new(Mutex::new(Last {
     unix_time:0,
     market:config.market_name.clone(),
     price: 0, //  initial value 
-};
+}));
+let last_http_clone = Arc::clone(&last_dyn); 
 let mut tns =TimeSale {
     market: "".to_string(),
    exchange:"".to_string(),
@@ -273,10 +274,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             remaining_quantity -= subtract_quantity;
                                             position.position_quantity -= subtract_quantity;
 
-                                            if let Some(quantity) = short_tree.interest.get_mut(&position.price) {
+                                            if let Some(quantity) = short_tree.interest.get_mut(&position.opening_price) {
                                                 *quantity -= subtract_quantity;
                                                 if *quantity == 0 {
-                                                    short_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                    short_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                 }
                                             }
                             
@@ -290,7 +291,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_taker,
                                                 position_side: OrderSide::Short,
                                                 position_quantity: subtract_quantity,
-                                                initial_price: position.price,
+                                                opening_price: position.opening_price,
                                                 closing_price: trade.price,
                                             };
                             
@@ -302,11 +303,11 @@ tokio::task::spawn_blocking(move || { //positioning
                             
                                             let string_m = format!(
                                                 "{} {}, {} {} position from price level {} to {}, closed",
-                                                trade.unix_time, trade.market, subtract_quantity, "Short", position.price, trade.price
+                                                trade.unix_time, trade.market, subtract_quantity, "Short", position.opening_price, trade.price
                                             );
                                             message_position_taker(&trade, &txb3, string_m.clone());
                                             trader_info(&close_position,&config_position, &txb3 );
-                                            interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                            interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                             // Remove the specific position if the quantity is zero
                                             if position.position_quantity == 0 {
                                                 positions.retain(|p| p.position_identifier != position_id);
@@ -320,10 +321,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                     remaining_quantity -= subtract_quantity2;
                                                     position.position_quantity -= subtract_quantity2;
 
-                                                    if let Some(quantity) = short_tree.interest.get_mut(&position.price) {
+                                                    if let Some(quantity) = short_tree.interest.get_mut(&position.opening_price) {
                                                         *quantity -= subtract_quantity2;
                                                         if *quantity == 0 {
-                                                            short_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                            short_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                         }
                                                     }
                             
@@ -337,7 +338,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                         trader_identifier: trade.trader_identifier_taker,
                                                         position_side: OrderSide::Short,
                                                         position_quantity: subtract_quantity2,
-                                                        initial_price: position.price,
+                                                        opening_price: position.opening_price,
                                                         closing_price: trade.price,
                                                     };
                             
@@ -348,11 +349,11 @@ tokio::task::spawn_blocking(move || { //positioning
                             
                                                     let string_m = format!(
                                                         "{} {}, {} {} position from price level {} to {}, closed",
-                                                        trade.unix_time, trade.market, subtract_quantity2, "Short", position.price, trade.price
+                                                        trade.unix_time, trade.market, subtract_quantity2, "Short", position.opening_price, trade.price
                                                     );
                                                     message_position_taker(&trade, &txb3, string_m.clone());
                                                     trader_info(&close_position,&config_position, &txb3 );
-                                                    interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                                    interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                                     // Remove the position if the quantity is zero, or update it in the vector
                                                     if position.position_quantity == 0 {
                                                         positions.remove(0);
@@ -371,7 +372,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_taker,
                                                 position_side: OrderSide::Long,
                                                 position_quantity: remaining_quantity,
-                                                price: trade.price,
+                                                opening_price: trade.price,
                                             };
 
                                             long_map
@@ -420,10 +421,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 // Update the position's quantity
                                                 position.position_quantity -= subtract_quantity;
 
-                                                if let Some(quantity) = short_tree.interest.get_mut(&position.price) {
+                                                if let Some(quantity) = short_tree.interest.get_mut(&position.opening_price) {
                                                     *quantity -= subtract_quantity;
                                                     if *quantity == 0 {
-                                                        short_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                        short_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                     }
                                                 }
                             
@@ -437,7 +438,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                     trader_identifier: trade.trader_identifier_taker,
                                                     position_side: OrderSide::Short,
                                                     position_quantity: subtract_quantity,
-                                                    initial_price: position.price,
+                                                    opening_price: position.opening_price,
                                                     closing_price: trade.price,
                                                 };
                             
@@ -446,10 +447,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 if let Err(e) = txb3.send(close_position_message) {
                                                     eprintln!("Failed to send close position message: {:?}", e);
                                                 }
-                                                let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Short",position.price, trade.price );
+                                                let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Short",position.opening_price, trade.price );
                                                 message_position_taker(&trade,&txb3,string_m.clone());
                                                 trader_info(&close_position,&config_position, &txb3 );
-                                                interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                                interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                                 // If the position quantity is zero, remove it from the vector
                                                 if position.position_quantity == 0 {
                                                     positions.remove(0);
@@ -471,7 +472,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_taker,
                                                 position_side: OrderSide::Long,
                                                 position_quantity: remaining_quantity,
-                                                price: trade.price,
+                                                opening_price: trade.price,
                                             };
                             
                                             long_map
@@ -517,10 +518,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             // Update the position's quantity
                                             position.position_quantity -= subtract_quantity;
 
-                                            if let Some(quantity) = short_tree.interest.get_mut(&position.price) {
+                                            if let Some(quantity) = short_tree.interest.get_mut(&position.opening_price) {
                                                 *quantity -= subtract_quantity;
                                                 if *quantity == 0 {
-                                                    short_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                    short_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                 }
                                             }
                         
@@ -534,7 +535,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_taker,
                                                 position_side: OrderSide::Short,
                                                 position_quantity: subtract_quantity,
-                                                initial_price: position.price,
+                                                opening_price: position.opening_price,
                                                 closing_price: trade.price,
                                             };
                         
@@ -543,10 +544,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             if let Err(e) = txb3.send(close_position_message) {
                                                 eprintln!("Failed to send close position message: {:?}", e);
                                             }
-                                            let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Short",position.price, trade.price );
+                                            let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Short",position.opening_price, trade.price );
                                             message_position_taker(&trade,&txb3,string_m.clone());
                                             trader_info(&close_position,&config_position, &txb3 );
-                                            interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                            interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                             // If the position quantity is zero, remove it from the vector
                                             if position.position_quantity == 0 {
                                                 positions.remove(0);
@@ -568,7 +569,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                             trader_identifier: trade.trader_identifier_taker,
                                             position_side: OrderSide::Long,
                                             position_quantity: remaining_quantity,
-                                            price: trade.price,
+                                            opening_price: trade.price,
                                         };
                         
                                         long_map
@@ -610,7 +611,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                     trader_identifier: trade.trader_identifier_taker,
                                     position_side: OrderSide::Long,
                                     position_quantity: trade.order_quantity,
-                                    price: trade.price,
+                                    opening_price: trade.price,
                                 };
                                 long_map.entry(trade.trader_identifier_taker).or_default().push(new_position.clone());
                                 let position_message = Structs::PositionStruct(new_position);
@@ -649,10 +650,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             remaining_quantity -= subtract_quantity;
                                             position.position_quantity -= subtract_quantity;
 
-                                            if let Some(quantity) = long_tree.interest.get_mut(&position.price) {
+                                            if let Some(quantity) = long_tree.interest.get_mut(&position.opening_price) {
                                                 *quantity -= subtract_quantity;
                                                 if *quantity == 0 {
-                                                    long_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                    long_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                 }
                                             }
                             
@@ -666,7 +667,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_taker,
                                                 position_side: OrderSide::Long,
                                                 position_quantity: subtract_quantity,
-                                                initial_price: position.price,
+                                                opening_price: position.opening_price,
                                                 closing_price: trade.price,
                                             };
                             
@@ -678,11 +679,11 @@ tokio::task::spawn_blocking(move || { //positioning
                             
                                             let string_m = format!(
                                                 "{} {}, {} {} position from price level {} to {}, closed",
-                                                trade.unix_time, trade.market, subtract_quantity, "Long", position.price, trade.price
+                                                trade.unix_time, trade.market, subtract_quantity, "Long", position.opening_price, trade.price
                                             );
                                             message_position_taker(&trade, &txb3, string_m.clone());
                                             trader_info(&close_position,&config_position, &txb3 );
-                                            interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                            interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                             // Remove the specific position if the quantity is zero
                                             if position.position_quantity == 0 {
                                                 positions.retain(|p| p.position_identifier != position_id);
@@ -696,10 +697,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                     remaining_quantity -= subtract_quantity2;
                                                     position.position_quantity -= subtract_quantity2;
 
-                                                    if let Some(quantity) = long_tree.interest.get_mut(&position.price) {
+                                                    if let Some(quantity) = long_tree.interest.get_mut(&position.opening_price) {
                                                         *quantity -= subtract_quantity2;
                                                         if *quantity == 0 {
-                                                            long_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                            long_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                         }
                                                     }
                             
@@ -713,7 +714,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                         trader_identifier: trade.trader_identifier_taker,
                                                         position_side: OrderSide::Long,
                                                         position_quantity: subtract_quantity2,
-                                                        initial_price: position.price,
+                                                        opening_price: position.opening_price,
                                                         closing_price: trade.price,
                                                     };
                             
@@ -724,11 +725,11 @@ tokio::task::spawn_blocking(move || { //positioning
                             
                                                     let string_m = format!(
                                                         "{} {}, {} {} position from price level {} to {}, closed",
-                                                        trade.unix_time, trade.market, subtract_quantity2, "Long", position.price, trade.price
+                                                        trade.unix_time, trade.market, subtract_quantity2, "Long", position.opening_price, trade.price
                                                     );
                                                     message_position_taker(&trade, &txb3, string_m.clone());
                                                     trader_info(&close_position,&config_position, &txb3 );
-                                                    interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                                    interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                                     // Remove the position if the quantity is zero, or update it in the vector
                                                     if position.position_quantity == 0 {
                                                         positions.remove(0);
@@ -747,7 +748,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_taker,
                                                 position_side: OrderSide::Short,
                                                 position_quantity: remaining_quantity,
-                                                price: trade.price,
+                                                opening_price: trade.price,
                                             };
 
                                             short_map
@@ -796,10 +797,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 // Update the position's quantity
                                                 position.position_quantity -= subtract_quantity;
 
-                                                if let Some(quantity) = long_tree.interest.get_mut(&position.price) {
+                                                if let Some(quantity) = long_tree.interest.get_mut(&position.opening_price) {
                                                     *quantity -= subtract_quantity;
                                                     if *quantity == 0 {
-                                                        long_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                        long_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                     }
                                                 }
                             
@@ -813,7 +814,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                     trader_identifier: trade.trader_identifier_taker,
                                                     position_side: OrderSide::Long,
                                                     position_quantity: subtract_quantity,
-                                                    initial_price: position.price,
+                                                    opening_price: position.opening_price,
                                                     closing_price: trade.price,
                                                 };
                             
@@ -822,10 +823,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 if let Err(e) = txb3.send(close_position_message) {
                                                     eprintln!("Failed to send close position message: {:?}", e);
                                                 }
-                                                let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Long",position.price, trade.price );
+                                                let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Long",position.opening_price, trade.price );
                                                 message_position_taker(&trade,&txb3,string_m.clone());
                                                 trader_info(&close_position,&config_position, &txb3 );
-                                                interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                                interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                                 // If the position quantity is zero, remove it from the vector
                                                 if position.position_quantity == 0 {
                                                     positions.remove(0);
@@ -847,7 +848,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_taker,
                                                 position_side: OrderSide::Short,
                                                 position_quantity: remaining_quantity,
-                                                price: trade.price,
+                                                opening_price: trade.price,
                                             };
                             
                                             short_map
@@ -893,10 +894,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             // Update the position's quantity
                                             position.position_quantity -= subtract_quantity;
 
-                                            if let Some(quantity) = long_tree.interest.get_mut(&position.price) {
+                                            if let Some(quantity) = long_tree.interest.get_mut(&position.opening_price) {
                                                 *quantity -= subtract_quantity;
                                                 if *quantity == 0 {
-                                                    long_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                    long_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                 }
                                             }
                         
@@ -910,7 +911,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_taker,
                                                 position_side: OrderSide::Long,
                                                 position_quantity: subtract_quantity,
-                                                initial_price: position.price,
+                                                opening_price: position.opening_price,
                                                 closing_price: trade.price,
                                             };
                         
@@ -919,10 +920,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             if let Err(e) = txb3.send(close_position_message) {
                                                 eprintln!("Failed to send close position message: {:?}", e);
                                             }
-                                            let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Long",position.price, trade.price );
+                                            let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Long",position.opening_price, trade.price );
                                             message_position_taker(&trade,&txb3,string_m.clone());
                                             trader_info(&close_position,&config_position, &txb3 );
-                                            interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                            interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                             // If the position quantity is zero, remove it from the vector
                                             if position.position_quantity == 0 {
                                                 positions.remove(0);
@@ -944,7 +945,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                             trader_identifier: trade.trader_identifier_taker,
                                             position_side: OrderSide::Short,
                                             position_quantity: remaining_quantity,
-                                            price: trade.price,
+                                            opening_price: trade.price,
                                         };
                         
                                         short_map
@@ -986,7 +987,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                     trader_identifier: trade.trader_identifier_taker,
                                     position_side: OrderSide::Short,
                                     position_quantity: trade.order_quantity,
-                                    price: trade.price,
+                                    opening_price: trade.price,
                                 };
                                 short_map.entry(trade.trader_identifier_taker).or_default().push(new_position.clone());
                                 let position_message = Structs::PositionStruct(new_position);
@@ -1032,10 +1033,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             remaining_quantity -= subtract_quantity;
                                             position.position_quantity -= subtract_quantity;
 
-                                            if let Some(quantity) = short_tree.interest.get_mut(&position.price) {
+                                            if let Some(quantity) = short_tree.interest.get_mut(&position.opening_price) {
                                                 *quantity -= subtract_quantity;
                                                 if *quantity == 0 {
-                                                    short_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                    short_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                 }
                                             }
                             
@@ -1049,7 +1050,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_maker,
                                                 position_side: OrderSide::Short,
                                                 position_quantity: subtract_quantity,
-                                                initial_price: position.price,
+                                                opening_price: position.opening_price,
                                                 closing_price: trade.price,
                                             };
                             
@@ -1061,11 +1062,11 @@ tokio::task::spawn_blocking(move || { //positioning
                             
                                             let string_m = format!(
                                                 "{} {}, {} {} position from price level {} to {}, closed",
-                                                trade.unix_time, trade.market, subtract_quantity, "Short", position.price, trade.price
+                                                trade.unix_time, trade.market, subtract_quantity, "Short", position.opening_price, trade.price
                                             );
                                             message_position_maker(&trade, &txb3, string_m.clone());
                                             trader_info(&close_position,&config_position, &txb3 );
-                                            interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                            interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                             // Remove the specific position if the quantity is zero
                                             if position.position_quantity == 0 {
                                                 positions.retain(|p| p.position_identifier != position_id);
@@ -1079,10 +1080,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                     remaining_quantity -= subtract_quantity2;
                                                     position.position_quantity -= subtract_quantity2;
 
-                                                    if let Some(quantity) = short_tree.interest.get_mut(&position.price) {
+                                                    if let Some(quantity) = short_tree.interest.get_mut(&position.opening_price) {
                                                         *quantity -= subtract_quantity2;
                                                         if *quantity == 0 {
-                                                            short_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                            short_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                         }
                                                     }
                             
@@ -1096,7 +1097,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                         trader_identifier: trade.trader_identifier_maker,
                                                         position_side: OrderSide::Short,
                                                         position_quantity: subtract_quantity2,
-                                                        initial_price: position.price,
+                                                        opening_price: position.opening_price,
                                                         closing_price: trade.price,
                                                     };
                             
@@ -1107,11 +1108,11 @@ tokio::task::spawn_blocking(move || { //positioning
                             
                                                     let string_m = format!(
                                                         "{} {}, {} {} position from price level {} to {}, closed",
-                                                        trade.unix_time, trade.market, subtract_quantity2, "Short", position.price, trade.price
+                                                        trade.unix_time, trade.market, subtract_quantity2, "Short", position.opening_price, trade.price
                                                     );
                                                     message_position_maker(&trade, &txb3, string_m.clone());
                                                     trader_info(&close_position,&config_position, &txb3 );
-                                                    interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                                    interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                                     // Remove the position if the quantity is zero, or update it in the vector
                                                     if position.position_quantity == 0 {
                                                         positions.remove(0);
@@ -1130,7 +1131,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_maker,
                                                 position_side: OrderSide::Long,
                                                 position_quantity: remaining_quantity,
-                                                price: trade.price,
+                                                opening_price: trade.price,
                                             };
 
                                             long_map
@@ -1179,10 +1180,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 // Update the position's quantity
                                                 position.position_quantity -= subtract_quantity;
 
-                                                if let Some(quantity) = short_tree.interest.get_mut(&position.price) {
+                                                if let Some(quantity) = short_tree.interest.get_mut(&position.opening_price) {
                                                     *quantity -= subtract_quantity;
                                                     if *quantity == 0 {
-                                                        short_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                        short_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                     }
                                                 }
                             
@@ -1196,7 +1197,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                     trader_identifier: trade.trader_identifier_maker,
                                                     position_side: OrderSide::Short,
                                                     position_quantity: subtract_quantity,
-                                                    initial_price: position.price,
+                                                    opening_price: position.opening_price,
                                                     closing_price: trade.price,
                                                 };
                             
@@ -1205,10 +1206,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 if let Err(e) = txb3.send(close_position_message) {
                                                     eprintln!("Failed to send close position message: {:?}", e);
                                                 }
-                                                let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Short",position.price, trade.price );
+                                                let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Short",position.opening_price, trade.price );
                                                 message_position_maker(&trade,&txb3,string_m.clone());
                                                 trader_info(&close_position,&config_position, &txb3 );
-                                                interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                                interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                                 // If the position quantity is zero, remove it from the vector
                                                 if position.position_quantity == 0 {
                                                     positions.remove(0);
@@ -1230,7 +1231,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_maker,
                                                 position_side: OrderSide::Long,
                                                 position_quantity: remaining_quantity,
-                                                price: trade.price,
+                                                opening_price: trade.price,
                                             };
                             
                                             long_map
@@ -1276,10 +1277,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             // Update the position's quantity
                                             position.position_quantity -= subtract_quantity;
 
-                                            if let Some(quantity) = short_tree.interest.get_mut(&position.price) {
+                                            if let Some(quantity) = short_tree.interest.get_mut(&position.opening_price) {
                                                 *quantity -= subtract_quantity;
                                                 if *quantity == 0 {
-                                                    short_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                    short_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                 }
                                             }
                         
@@ -1293,7 +1294,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_maker,
                                                 position_side: OrderSide::Short,
                                                 position_quantity: subtract_quantity,
-                                                initial_price: position.price,
+                                                opening_price: position.opening_price,
                                                 closing_price: trade.price,
                                             };
                         
@@ -1302,10 +1303,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             if let Err(e) = txb3.send(close_position_message) {
                                                 eprintln!("Failed to send close position message: {:?}", e);
                                             }
-                                            let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Short",position.price, trade.price );
+                                            let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Short",position.opening_price, trade.price );
                                             message_position_maker(&trade,&txb3,string_m.clone());
                                             trader_info(&close_position,&config_position, &txb3 );
-                                            interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                            interest_event(Utc::now().timestamp_micros(),"Short".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                             // If the position quantity is zero, remove it from the vector
                                             if position.position_quantity == 0 {
                                                 positions.remove(0);
@@ -1327,7 +1328,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                             trader_identifier: trade.trader_identifier_maker,
                                             position_side: OrderSide::Long,
                                             position_quantity: remaining_quantity,
-                                            price: trade.price,
+                                            opening_price: trade.price,
                                         };
                         
                                         long_map
@@ -1369,7 +1370,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                     trader_identifier: trade.trader_identifier_maker,
                                     position_side: OrderSide::Long,
                                     position_quantity: trade.order_quantity,
-                                    price: trade.price,
+                                    opening_price: trade.price,
                                 };
                                 long_map.entry(trade.trader_identifier_maker).or_default().push(new_position.clone());
                                 let position_message = Structs::PositionStruct(new_position);
@@ -1408,10 +1409,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             remaining_quantity -= subtract_quantity;
                                             position.position_quantity -= subtract_quantity;
 
-                                            if let Some(quantity) = long_tree.interest.get_mut(&position.price) {
+                                            if let Some(quantity) = long_tree.interest.get_mut(&position.opening_price) {
                                                 *quantity -= subtract_quantity;
                                                 if *quantity == 0 {
-                                                    long_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                    long_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                 }
                                             }
                             
@@ -1425,7 +1426,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_maker,
                                                 position_side: OrderSide::Long,
                                                 position_quantity: subtract_quantity,
-                                                initial_price: position.price,
+                                                opening_price: position.opening_price,
                                                 closing_price: trade.price,
                                             };
                             
@@ -1437,11 +1438,11 @@ tokio::task::spawn_blocking(move || { //positioning
                             
                                             let string_m = format!(
                                                 "{} {}, {} {} position from price level {} to {}, closed",
-                                                trade.unix_time, trade.market, subtract_quantity, "Long", position.price, trade.price
+                                                trade.unix_time, trade.market, subtract_quantity, "Long", position.opening_price, trade.price
                                             );
                                             message_position_maker(&trade, &txb3, string_m.clone());
                                             trader_info(&close_position,&config_position, &txb3 );
-                                            interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                            interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                             // Remove the specific position if the quantity is zero
                                             if position.position_quantity == 0 {
                                                 positions.retain(|p| p.position_identifier != position_id);
@@ -1455,10 +1456,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                     remaining_quantity -= subtract_quantity2;
                                                     position.position_quantity -= subtract_quantity2;
 
-                                                    if let Some(quantity) = long_tree.interest.get_mut(&position.price) {
+                                                    if let Some(quantity) = long_tree.interest.get_mut(&position.opening_price) {
                                                         *quantity -= subtract_quantity2;
                                                         if *quantity == 0 {
-                                                            long_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                            long_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                         }
                                                     }
                             
@@ -1472,7 +1473,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                         trader_identifier: trade.trader_identifier_maker,
                                                         position_side: OrderSide::Long,
                                                         position_quantity: subtract_quantity2,
-                                                        initial_price: position.price,
+                                                        opening_price: position.opening_price,
                                                         closing_price: trade.price,
                                                     };
                             
@@ -1483,11 +1484,11 @@ tokio::task::spawn_blocking(move || { //positioning
                             
                                                     let string_m = format!(
                                                         "{} {}, {} {} position from price level {} to {}, closed",
-                                                        trade.unix_time, trade.market, subtract_quantity2, "Long", position.price, trade.price
+                                                        trade.unix_time, trade.market, subtract_quantity2, "Long", position.opening_price, trade.price
                                                     );
                                                     message_position_maker(&trade, &txb3, string_m.clone());
                                                     trader_info(&close_position,&config_position, &txb3 );
-                                                    interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                                    interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                                     // Remove the position if the quantity is zero, or update it in the vector
                                                     if position.position_quantity == 0 {
                                                         positions.remove(0);
@@ -1506,7 +1507,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_maker,
                                                 position_side: OrderSide::Short,
                                                 position_quantity: remaining_quantity,
-                                                price: trade.price,
+                                                opening_price: trade.price,
                                             };
 
                                             short_map
@@ -1555,10 +1556,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 // Update the position's quantity
                                                 position.position_quantity -= subtract_quantity;
 
-                                                if let Some(quantity) = long_tree.interest.get_mut(&position.price) {
+                                                if let Some(quantity) = long_tree.interest.get_mut(&position.opening_price) {
                                                     *quantity -= subtract_quantity;
                                                     if *quantity == 0 {
-                                                        long_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                        long_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                     }
                                                 }
                             
@@ -1572,7 +1573,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                     trader_identifier: trade.trader_identifier_maker,
                                                     position_side: OrderSide::Long,
                                                     position_quantity: subtract_quantity,
-                                                    initial_price: position.price,
+                                                    opening_price: position.opening_price,
                                                     closing_price: trade.price,
                                                 };
                             
@@ -1581,10 +1582,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 if let Err(e) = txb3.send(close_position_message) {
                                                     eprintln!("Failed to send close position message: {:?}", e);
                                                 }
-                                                let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Long",position.price, trade.price );
+                                                let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Long",position.opening_price, trade.price );
                                                 message_position_maker(&trade,&txb3,string_m.clone());
                                                 trader_info(&close_position,&config_position, &txb3 );
-                                                interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                                interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                                 // If the position quantity is zero, remove it from the vector
                                                 if position.position_quantity == 0 {
                                                     positions.remove(0);
@@ -1606,7 +1607,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_maker,
                                                 position_side: OrderSide::Short,
                                                 position_quantity: remaining_quantity,
-                                                price: trade.price,
+                                                opening_price: trade.price,
                                             };
                             
                                             short_map
@@ -1652,10 +1653,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             // Update the position's quantity
                                             position.position_quantity -= subtract_quantity;
 
-                                            if let Some(quantity) = long_tree.interest.get_mut(&position.price) {
+                                            if let Some(quantity) = long_tree.interest.get_mut(&position.opening_price) {
                                                 *quantity -= subtract_quantity;
                                                 if *quantity == 0 {
-                                                    long_tree.interest.remove(&position.price);  // Remove the price level if quantity is zero
+                                                    long_tree.interest.remove(&position.opening_price);  // Remove the price level if quantity is zero
                                                 }
                                             }
                         
@@ -1669,7 +1670,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                                 trader_identifier: trade.trader_identifier_maker,
                                                 position_side: OrderSide::Long,
                                                 position_quantity: subtract_quantity,
-                                                initial_price: position.price,
+                                                opening_price: position.opening_price,
                                                 closing_price: trade.price,
                                             };
                         
@@ -1678,10 +1679,10 @@ tokio::task::spawn_blocking(move || { //positioning
                                             if let Err(e) = txb3.send(close_position_message) {
                                                 eprintln!("Failed to send close position message: {:?}", e);
                                             }
-                                            let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Long",position.price, trade.price );
+                                            let string_m = format! ("{} {}, {} {} position from price level {} to {}, closed", trade.unix_time,trade.market,subtract_quantity,"Long",position.opening_price, trade.price );
                                             message_position_maker(&trade,&txb3,string_m.clone());
                                             trader_info(&close_position,&config_position, &txb3 );
-                                            interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.price,-1,&txm2,&config_position);
+                                            interest_event(Utc::now().timestamp_micros(),"Long".to_string(),subtract_quantity,position.opening_price,-1,&txm2,&config_position);
                                             // If the position quantity is zero, remove it from the vector
                                             if position.position_quantity == 0 {
                                                 positions.remove(0);
@@ -1703,7 +1704,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                             trader_identifier: trade.trader_identifier_maker,
                                             position_side: OrderSide::Short,
                                             position_quantity: remaining_quantity,
-                                            price: trade.price,
+                                            opening_price: trade.price,
                                         };
                         
                                         short_map
@@ -1745,7 +1746,7 @@ tokio::task::spawn_blocking(move || { //positioning
                                     trader_identifier: trade.trader_identifier_maker,
                                     position_side: OrderSide::Short,
                                     position_quantity: trade.order_quantity,
-                                    price: trade.price,
+                                    opening_price: trade.price,
                                 };
                                 short_map.entry(trade.trader_identifier_maker).or_default().push(new_position.clone());
                                 let position_message = Structs::PositionStruct(new_position);
@@ -1811,7 +1812,9 @@ tokio::task::spawn_blocking(move || { //positioning
             }   
     }
 });
-tokio::task::spawn_blocking(  move ||  { //order
+tokio::task::spawn_blocking( { //order
+    let last_arc_clone = Arc::clone(&last_dyn);
+     move ||  {
     loop {
         //let message_arrive:Structs;
       
@@ -1823,6 +1826,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                 if let Err(e) = tx_broker.send(msg) {
                     eprintln!("Error sending message through txb2: {:?}", e);
                 }
+
                 match message_arrive {
                     Structs::LimitOrder(arrival) => {
                         match arrival.order_side {
@@ -2023,26 +2027,34 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         tns = time_sale(&config, Utc::now().timestamp_micros(), quantity, arrival.order_side.clone(), price);
                                                                                         let tns_message = Structs::TimeSale(tns);
                                                                                         if let Err(e) = tx_market.send(tns_message) {
-                    eprintln!("Failed to send message: {:?}", e);
+                                                                                        eprintln!("Failed to send message: {:?}", e);
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
-                    eprintln!("Failed to send message: {:?}", e);
+                                                                                        eprintln!("Failed to send message: {:?}", e);
                 }
-                
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
+                                                                                       
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                        let volume_message = Structs::Volume(volume_struct);
                                                                                        if let Err(e) = tx_market.send(volume_message) {
-                    eprintln!("Failed to send message: {:?}", e);
+                                                                                        eprintln!("Failed to send message: {:?}", e);
                 }                                                                       let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
                                                                                         
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                 
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                         
@@ -2080,14 +2092,22 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                            let tplast_message = Structs::Last(tplast);
+                                                                                            let tplast_message = Structs::Last(tplast.clone());
                                                                                             if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }                                                                               
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                                Ok(mut last_arc_mut) => {
+                                                                                                    *last_arc_mut = tplast.clone(); // Update the data
+                                                                                                }
+                                                                                                Err(e) => {
+                                                                                                    eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                    return; // Or handle the error in a way that makes sense for your application
+                                                                                                }
+                                                                                            }
                                                                                             
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                             let volume_message = Structs::Volume(volume_struct);
@@ -2095,8 +2115,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                     eprintln!("Failed to send message: {:?}", e);
                 }
                                                                                             
-                                                                                            ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                            ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                            
@@ -2140,12 +2160,19 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                       let tplast_message = Structs::Last(tplast);
+                                                                                       let tplast_message = Structs::Last(tplast.clone());
                                                                                        if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
-                
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -2154,8 +2181,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                 
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                         
@@ -2257,12 +2284,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                         let tplast_message = Structs::Last(tplast);
+                                                                                         let tplast_message = Structs::Last(tplast.clone());
                                                                                          if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price.clone(),&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -2271,8 +2306,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                     }
@@ -2310,12 +2345,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                            let tplast_message = Structs::Last(tplast);
+                                                                                            let tplast_message = Structs::Last(tplast.clone());
                                                                                             if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                                Ok(mut last_arc_mut) => {
+                                                                                                    *last_arc_mut = tplast.clone(); // Update the data
+                                                                                                }
+                                                                                                Err(e) => {
+                                                                                                    eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                    return; // Or handle the error in a way that makes sense for your application
+                                                                                                }
+                                                                                            }
                                                                                             
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                            let volume_message = Structs::Volume(volume_struct);
@@ -2324,8 +2367,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                           ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                           ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                           ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                           ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                            mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                             
                                                                                         remaining_quantity = 0;
@@ -2368,13 +2411,21 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
-                
-                                                                                        last_dyn.price = trader_order_struct.price;
-                                                                                        
+                                                                                    
+                                                                                    match last_arc_clone.lock() {
+                                                                                        Ok(mut last_arc_mut) => {
+                                                                                            *last_arc_mut = tplast.clone(); // Update the data
+                                                                                        }
+                                                                                        Err(e) => {
+                                                                                            eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                            return; // Or handle the error in a way that makes sense for your application
+                                                                                        }
+                                                                                    }
+                                                                                                                                                            
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
                                                                                         if let Err(e) = tx_market.send(volume_message) {
@@ -2382,8 +2433,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                     }
                                                                                 }
@@ -2454,12 +2505,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
-                
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -2468,8 +2527,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                     }
                                                                                 }
@@ -2506,12 +2565,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                            let tplast_message = Structs::Last(tplast);
+                                                                                            let tplast_message = Structs::Last(tplast.clone());
                                                                                             if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                                Ok(mut last_arc_mut) => {
+                                                                                                    *last_arc_mut = tplast.clone(); // Update the data
+                                                                                                }
+                                                                                                Err(e) => {
+                                                                                                    eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                    return; // Or handle the error in a way that makes sense for your application
+                                                                                                }
+                                                                                            }
                                                                                             
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                             let volume_message = Structs::Volume(volume_struct);
@@ -2520,8 +2587,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                            ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                            ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                            
                                                                                         remaining_quantity = 0;
@@ -2560,16 +2627,24 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         tns = time_sale(&config, Utc::now().timestamp_micros(), quantity, arrival.order_side.clone(), price);
                                                                                         let tns_message = Structs::TimeSale(tns);
                                                                                         if let Err(e) = tx_market.send(tns_message) {
-                    eprintln!("Failed to send message: {:?}", e);
-                }
+                                                                                            eprintln!("Failed to send message: {:?}", e);
+                                                                                        }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
-                    eprintln!("Failed to send message: {:?}", e);
-                }
+                                                                                            eprintln!("Failed to send message: {:?}", e);
+                                                                                        }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -2578,8 +2653,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                     }
                                                                                 }
@@ -2677,12 +2752,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -2691,8 +2774,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                     }
@@ -2730,12 +2813,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                           let tplast_message = Structs::Last(tplast);
+                                                                                           let tplast_message = Structs::Last(tplast.clone());
                                                                                            if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                             
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                             let volume_message = Structs::Volume(volume_struct);
@@ -2744,8 +2835,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                            ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                            ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                         remaining_quantity = 0;
@@ -2788,12 +2879,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                         let tplast_message = Structs::Last(tplast);
+                                                                                         let tplast_message = Structs::Last(tplast.clone());
                                                                                          if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                          let volume_message = Structs::Volume(volume_struct);
@@ -2802,8 +2901,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                         ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                         ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                         ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                         ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                          mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                     }
                                                                                 }
@@ -2873,12 +2972,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -2887,8 +2994,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                     }
@@ -2926,12 +3033,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                            let tplast_message = Structs::Last(tplast);
+                                                                                            let tplast_message = Structs::Last(tplast.clone());
                                                                                             if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                             
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                             let volume_message = Structs::Volume(volume_struct);
@@ -2940,8 +3055,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                            ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                            ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                     
                                                                                         remaining_quantity = 0;
@@ -2984,12 +3099,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -2998,8 +3121,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                     }
@@ -3296,12 +3419,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                        let volume_message = Structs::Volume(volume_struct);
@@ -3310,8 +3441,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                       ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                       ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                     }
@@ -3349,12 +3480,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                             let tplast_message = Structs::Last(tplast);
+                                                                                             let tplast_message = Structs::Last(tplast.clone());
                                                                                              if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                             
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                             let volume_message = Structs::Volume(volume_struct);
@@ -3363,8 +3502,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                            ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                            ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                             
                                                                                             remaining_quantity = 0;
@@ -3407,12 +3546,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -3421,8 +3568,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                     }
                                                                                 }
@@ -3521,12 +3668,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -3535,8 +3690,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                     }
@@ -3574,12 +3729,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                            let tplast_message = Structs::Last(tplast);
+                                                                                            let tplast_message = Structs::Last(tplast.clone());
                                                                                             if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                             
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                             let volume_message = Structs::Volume(volume_struct);
@@ -3588,8 +3751,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                            ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                            ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                          
                                                                                         remaining_quantity = 0;
@@ -3632,12 +3795,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side,price,&config);
                                                                                          let volume_message = Structs::Volume(volume_struct);
@@ -3646,8 +3817,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                         ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                         ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                         ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                         ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                          mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                     }
                                                                                 }
@@ -3716,13 +3887,21 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                     
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side,price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -3731,8 +3910,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                     }
                                                                                 }
@@ -3769,12 +3948,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                            let tplast_message = Structs::Last(tplast);
+                                                                                            let tplast_message = Structs::Last(tplast.clone());
                                                                                             if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                            
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                             let volume_message = Structs::Volume(volume_struct);
@@ -3783,8 +3970,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                            ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                            ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                  
                                                                                             remaining_quantity = 0;
@@ -3827,12 +4014,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side,price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -3841,8 +4036,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                     }
@@ -3941,12 +4136,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -3955,8 +4158,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                     }
                                                                                 }
@@ -3993,12 +4196,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                            let tplast_message = Structs::Last(tplast);
+                                                                                            let tplast_message = Structs::Last(tplast.clone());
                                                                                             if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                            
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                             let volume_message = Structs::Volume(volume_struct);
@@ -4007,8 +4218,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                            ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                            ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                             
                                                                                         remaining_quantity = 0;
@@ -4051,12 +4262,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                       let tplast_message = Structs::Last(tplast);
+                                                                                       let tplast_message = Structs::Last(tplast.clone());
                                                                                        if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                        let volume_message = Structs::Volume(volume_struct);
@@ -4065,8 +4284,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                       ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                       ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                       ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                       ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                        mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                     }
@@ -4138,12 +4357,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                       let tplast_message = Structs::Last(tplast);
+                                                                                       let tplast_message = Structs::Last(tplast.clone());
                                                                                        if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -4152,8 +4379,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                     }
@@ -4191,12 +4418,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                             let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                            let tplast_message = Structs::Last(tplast);
+                                                                                            let tplast_message = Structs::Last(tplast.clone());
                                                                                             if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                            last_dyn.price = trader_order_struct.price;
+                                                                                            match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                             
                                                                                             let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                             let volume_message = Structs::Volume(volume_struct);
@@ -4205,8 +4440,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                            ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                            ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                             
                                                                                         remaining_quantity = 0;
@@ -4249,12 +4484,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -4264,8 +4507,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                        
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                     }
                                                                                 }
@@ -4385,18 +4628,18 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                 order_quantity:arrival.order_quantity,
                                                 order_side: arrival.order_side.clone(),
                                                 expiration:arrival.expiration.clone(),
-                                                price: last_dyn.price,
+                                                price: last_arc_clone.lock().unwrap().price,
                                                 pointing_at:arrival.pointing_at,
                                             };
                                             bid_struct.insert(order_idb, bid_structi);//insert in last traded price
                 
                                             // Inserting into bid_map
-                                            bid_map.map.entry(last_dyn.price)
+                                            bid_map.map.entry(last_arc_clone.lock().unwrap().price)
                                             .and_modify(|vec| vec.push(order_idb))
                                             .or_insert_with(|| vec![order_idb]);
                 
                                             // Inserting into bid_mbo
-                                            match bid_mbo.mbo.entry(last_dyn.price) {
+                                            match bid_mbo.mbo.entry(last_arc_clone.lock().unwrap().price) {
                                             Entry::Occupied(mut entry) => {
                                                 entry.get_mut().push(arrival.order_quantity);
                                             }
@@ -4406,7 +4649,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                                             }
                                             
                                             // Inserting into bid_mbp
-                                            *bid_mbp.mbp.entry(last_dyn.price).or_insert(0) += arrival.order_quantity;
+                                            *bid_mbp.mbp.entry(last_arc_clone.lock().unwrap().price).or_insert(0) += arrival.order_quantity;
                     
                                             // Inserting or updating the trader_order_identifier
                                 
@@ -4420,7 +4663,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                 order_quantity:arrival.order_quantity,
                                                 order_side: arrival.order_side.clone(),
                                                 expiration:arrival.expiration.clone(),
-                                                price: last_dyn.price,
+                                                price: last_arc_clone.lock().unwrap().price,
                                                 pointing_at:arrival.pointing_at,
                                             };
                                             let order_message = Structs::TraderOrderStruct(bid_structii);
@@ -4428,13 +4671,13 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                 eprintln!("Failed to send message: {:?}", e);
                                             }
                 
-                                            let string_m = format! ("{} {}, {} {} {} limit order at {} price level, id {} added to order-book", Utc::now().timestamp_micros(),arrival.market.clone(),arrival.order_quantity,arrival.order_side.clone(),arrival.expiration.clone(),last_dyn.price,order_idb );
+                                            let string_m = format! ("{} {}, {} {} {} limit order at {} price level, id {} added to order-book", Utc::now().timestamp_micros(),arrival.market.clone(),arrival.order_quantity,arrival.order_side.clone(),arrival.expiration.clone(),last_arc_clone.lock().unwrap().price,order_idb );
                                             message_market_taker(&arrival,&tx_broker,string_m);
                 
-                                                    mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), arrival.order_quantity, last_dyn.price, 1, &tx_market,&config);
+                                                    mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), arrival.order_quantity, last_arc_clone.lock().unwrap().price, 1, &tx_market,&config);
                                            
                                         } else {
-                                            let string_m = format! ("{} {}, {} {} {} market order at {} price level, Not matched", Utc::now().timestamp_micros(),arrival.market,arrival.order_quantity,arrival.order_side.clone(),arrival.expiration.clone(),last_dyn.price );
+                                            let string_m = format! ("{} {}, {} {} {} market order at {} price level, Not matched", Utc::now().timestamp_micros(),arrival.market,arrival.order_quantity,arrival.order_side.clone(),arrival.expiration.clone(),last_arc_clone.lock().unwrap().price );
                                             message_market_taker(&arrival,&tx_broker,string_m);
                                         }
                                         },
@@ -4509,12 +4752,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                         eprintln!("Failed to send message: {:?}", e);
                                                                                     }
                                                                                     
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -4523,8 +4774,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -4562,12 +4813,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                         
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                                                                                                 eprintln!("Failed to send message: {:?}", e);
                                                                                             }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -4576,8 +4835,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                             }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                  
                                                                                         remaining_quantity = 0;
@@ -4621,12 +4880,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                             }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                             eprintln!("Failed to send message: {:?}", e);
                                                                                         }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -4635,8 +4902,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                                                    
                                                                                 }
@@ -4739,12 +5006,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                         eprintln!("Failed to send message: {:?}", e);
                                                                                     }
                                                                                     
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -4753,8 +5028,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone()); 
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -4793,12 +5068,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                                                                                                 eprintln!("Failed to send message: {:?}", e);
                                                                                             }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -4807,8 +5090,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                         
                                                                                     remaining_quantity = 0;
@@ -4852,12 +5135,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                         eprintln!("Failed to send message: {:?}", e);
                                                                                     }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -4866,8 +5157,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                 }
                                                                             }
@@ -4939,12 +5230,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                                     eprintln!("Failed to send message: {:?}", e);
                                                                                                 }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -4953,8 +5252,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                    
                                                                                 }
@@ -4992,12 +5291,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                                                                                                 eprintln!("Failed to send message: {:?}", e);
                                                                                             }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -5006,8 +5313,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                         
                                                                                     remaining_quantity = 0;
@@ -5050,12 +5357,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                         eprintln!("Failed to send message: {:?}", e);
                                                                                     }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -5064,8 +5379,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -5166,12 +5481,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                             eprintln!("Failed to send message: {:?}", e);
                                                                                         }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -5180,8 +5503,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                 
                                                                                 }
@@ -5221,12 +5544,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                             }
                                                                                         
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                                                                                                 eprintln!("Failed to send message: {:?}", e);
                                                                                             }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -5235,8 +5566,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                         
                                                                                     remaining_quantity = 0;
@@ -5284,12 +5615,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                             eprintln!("Failed to send message: {:?}", e);
                                                                                         }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -5298,8 +5637,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -5374,12 +5713,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                   
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);                            
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                         eprintln!("Failed to send message: {:?}", e);
                                                                                     }
                                                                                   
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                   
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -5388,8 +5735,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                   
                                                                                 }
@@ -5426,12 +5773,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                                                                                                 eprintln!("Failed to send message: {:?}", e);
                                                                                             }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                        let volume_message = Structs::Volume(volume_struct);
@@ -5440,8 +5795,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                       ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                       ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                       ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                       ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                        mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                       
                                                                                     remaining_quantity = 0;
@@ -5487,12 +5842,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                  
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
                                                                                
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                             eprintln!("Failed to send message: {:?}", e);
                                                                                         }
                                                                                
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                 
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -5501,8 +5864,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                              
                                                                                 }
@@ -5610,18 +5973,18 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                 order_quantity:arrival.order_quantity,
                                                 order_side: arrival.order_side.clone(),
                                                 expiration:arrival.expiration.clone(),
-                                                price: last_dyn.price,
+                                                price: last_arc_clone.lock().unwrap().price,
                                                 pointing_at:arrival.pointing_at,
                                             };
                                             ask_struct.insert(order_ids, ask_structi); //insert in last traded price
                 
                                             // Inserting into bid_map
-                                            ask_map.map.entry(last_dyn.price)
+                                            ask_map.map.entry(last_arc_clone.lock().unwrap().price)
                                             .and_modify(|vec| vec.push(order_ids))
                                             .or_insert_with(|| vec![order_ids]);
                 
                                             // Inserting into bid_mbo
-                                            match ask_mbo.mbo.entry(last_dyn.price) {
+                                            match ask_mbo.mbo.entry(last_arc_clone.lock().unwrap().price) {
                                             Entry::Occupied(mut entry) => {
                                                 entry.get_mut().push(arrival.order_quantity);
                                             }
@@ -5631,7 +5994,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                                             }
                 
                                             // Inserting into bid_mbp
-                                            *ask_mbp.mbp.entry(last_dyn.price).or_insert(0) += arrival.order_quantity;
+                                            *ask_mbp.mbp.entry(last_arc_clone.lock().unwrap().price).or_insert(0) += arrival.order_quantity;
                 
                 
                                             let ask_structii = TraderOrderStruct {
@@ -5644,7 +6007,7 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                 order_quantity:arrival.order_quantity,
                                                 order_side: arrival.order_side.clone(),
                                                 expiration:arrival.expiration.clone(),
-                                                price: last_dyn.price,
+                                                price: last_arc_clone.lock().unwrap().price,
                                                 pointing_at:arrival.pointing_at,
                                             };
                 
@@ -5653,12 +6016,12 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                 eprintln!("Failed to send message: {:?}", e);
                                             }
                 
-                                            let string_m = format! ("{} {}, {} {} {} limit order at {} price level, id {} added to order-book", Utc::now().timestamp_micros(),arrival.market.clone(),arrival.order_quantity,arrival.order_side.clone(),arrival.expiration.clone(),last_dyn.price,order_ids );
+                                            let string_m = format! ("{} {}, {} {} {} limit order at {} price level, id {} added to order-book", Utc::now().timestamp_micros(),arrival.market.clone(),arrival.order_quantity,arrival.order_side.clone(),arrival.expiration.clone(),last_arc_clone.lock().unwrap().price,order_ids );
                                             message_market_taker(&arrival,&tx_broker,string_m);
-                                                    mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), arrival.order_quantity, last_dyn.price, 1, &tx_market,&config);
+                                                    mbp_event( Utc::now().timestamp_micros(), "ask".to_string(), arrival.order_quantity, last_arc_clone.lock().unwrap().price, 1, &tx_market,&config);
                                         
                                         } else {
-                                            let string_m = format! ("{} {}, {} {} {} market order at {} price level, Not matched", Utc::now().timestamp_micros(),arrival.market,arrival.order_quantity,arrival.order_side.clone(),arrival.expiration.clone(),last_dyn.price );
+                                            let string_m = format! ("{} {}, {} {} {} market order at {} price level, Not matched", Utc::now().timestamp_micros(),arrival.market,arrival.order_quantity,arrival.order_side.clone(),arrival.expiration.clone(),last_arc_clone.lock().unwrap().price );
                                             message_market_taker(&arrival,&tx_broker,string_m);
                                         }    
                                         },
@@ -5731,12 +6094,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                         eprintln!("Failed to send message: {:?}", e);
                                                                                     }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -5745,8 +6116,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                    ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                    ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                     mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -5782,12 +6153,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                       let tplast_message = Structs::Last(tplast);
+                                                                                       let tplast_message = Structs::Last(tplast.clone());
                                                                                        if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                        let volume_message = Structs::Volume(volume_struct);
@@ -5796,8 +6175,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                       ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                       ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                       ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                       ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                        mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                        
                                                                                         remaining_quantity = 0;
@@ -5837,12 +6216,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -5851,8 +6238,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                    ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                    ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                     mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -5950,12 +6337,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                   let tplast_message = Structs::Last(tplast);
+                                                                                   let tplast_message = Structs::Last(tplast.clone());
                                                                                    if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                    
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                  let volume_message = Structs::Volume(volume_struct);
@@ -5964,8 +6359,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                 let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                 message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone()); 
-                                                                                 ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                 ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);  
+                                                                                 ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                 ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);  
                                                                                  mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -6002,12 +6397,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -6016,8 +6419,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());   
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                    ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                    ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                     mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                        
                                                                                     remaining_quantity = 0;
@@ -6057,12 +6460,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                     let tplast_message = Structs::Last(tplast);
+                                                                                     let tplast_message = Structs::Last(tplast.clone());
                                                                                      if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -6071,8 +6482,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                             let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                             message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -6140,12 +6551,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                     let tplast_message = Structs::Last(tplast);
+                                                                                     let tplast_message = Structs::Last(tplast.clone());
                                                                                      if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -6154,8 +6573,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                    ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                    ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                     mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -6190,12 +6609,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                     eprintln!("Failed to send message: {:?}", e);
                 }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -6204,8 +6631,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                         
                                                                                         remaining_quantity = 0;
@@ -6246,12 +6673,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                         eprintln!("Failed to send message: {:?}", e);
                                                                                     }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -6260,8 +6695,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -6359,12 +6794,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                             eprintln!("Failed to send message: {:?}", e);
                                                                                         }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                      let volume_message = Structs::Volume(volume_struct);
@@ -6373,8 +6816,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                     ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                     ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                     ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                     ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                      mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -6409,12 +6852,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                                                                                                 eprintln!("Failed to send message: {:?}", e);
                                                                                             }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -6423,8 +6874,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                        
                                                                                     remaining_quantity = 0;
@@ -6464,12 +6915,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                             }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                         eprintln!("Failed to send message: {:?}", e);
                                                                                     }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -6478,8 +6937,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -6548,12 +7007,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                         eprintln!("Failed to send message: {:?}", e);
                                                                                     }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -6562,8 +7029,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                 
                                                                                 }
@@ -6598,12 +7065,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                 
                                                                                         let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                        let tplast_message = Structs::Last(tplast);
+                                                                                        let tplast_message = Structs::Last(tplast.clone());
                                                                                         if let Err(e) = tx_market.send(tplast_message) {
                                                                                             eprintln!("Failed to send message: {:?}", e);
                                                                                         }
                 
-                                                                                        last_dyn.price = trader_order_struct.price;
+                                                                                        match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                         
                                                                                         let volume_struct = volume_struct(Utc::now().timestamp_micros(), remaining_quantity,&arrival.order_side.clone(),price,&config);
                                                                                         let volume_message = Structs::Volume(volume_struct);
@@ -6612,8 +7087,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                                 }
                                                                                         let string_m = format! ("{} {}, {} {} {} limit order at {} price level, partially matched, {} matched, {} remaining.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price,remaining_quantity,quantity-remaining_quantity );
                                                                                         message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                        ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                        ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), remaining_quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                        
                                                                                     remaining_quantity = 0;
@@ -6653,12 +7128,20 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                     }
                 
                                                                                     let tplast = tp_last(Utc::now().timestamp_micros(),trader_order_struct.price,&config);
-                                                                                    let tplast_message = Structs::Last(tplast);
+                                                                                    let tplast_message = Structs::Last(tplast.clone());
                                                                                     if let Err(e) = tx_market.send(tplast_message) {
                                                                                             eprintln!("Failed to send message: {:?}", e);
                                                                                         }
                 
-                                                                                    last_dyn.price = trader_order_struct.price;
+                                                                                    match last_arc_clone.lock() {
+                                                                                            Ok(mut last_arc_mut) => {
+                                                                                                *last_arc_mut = tplast.clone(); // Update the data
+                                                                                            }
+                                                                                            Err(e) => {
+                                                                                                eprintln!("Failed to lock the mutex for last_dyn: {:?}", e);
+                                                                                                return; // Or handle the error in a way that makes sense for your application
+                                                                                            }
+                                                                                        }
                                                                                     
                                                                                     let volume_struct = volume_struct(Utc::now().timestamp_micros(), quantity,&arrival.order_side.clone(),price,&config);
                                                                                     let volume_message = Structs::Volume(volume_struct);
@@ -6667,8 +7150,8 @@ tokio::task::spawn_blocking(  move ||  { //order
                                                                                         }
                                                                                     let string_m = format! ("{} {}, {} {} {} limit order at {} price level, totally matched.", Utc::now().timestamp_micros(),trader_order_struct.market,quantity,trader_order_struct.order_side.clone(),trader_order_struct.expiration.clone(),price );
                                                                                     message_limit_maker(&trader_order_struct,&tx_broker,string_m.clone());
-                                                                                    ex_stop (&stop_struct,&mut stop_map,&last_dyn,&tx2,&tx_broker);
-                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &last_dyn, &tx2, &tx_broker);
+                                                                                    ex_stop (&stop_struct,&mut stop_map,&tplast,&tx2,&tx_broker);
+                                                                                        ex_stop_limit(&stop_limit_struct, &mut stop_limit_map, &tplast, &tx2, &tx_broker);
                                                                                         mbp_event( Utc::now().timestamp_micros(), "bid".to_string(), quantity, trader_order_struct.price, -1, &tx_market,&config);
                                                                                    
                 
@@ -7401,26 +7884,24 @@ if last_save_time.elapsed().as_secs() >= 800 {
 }
             
     }
-});
+}});
 tokio::task::spawn_blocking({//Market
     let db1_market = Arc::clone(&db1_market);
     let connection_type_map = Arc::clone(&connection_type_map);
     let ws_connections = Arc::clone(&ws_connections);
     let coll_config = Arc::clone(&coll_config);
     move || {  
-
+       
     loop {
-     
+        let db1_market = Arc::clone(&db1_market);
+        let coll_config = Arc::clone(&coll_config);
+        let connection_type_map = Arc::clone(&connection_type_map);
+        let ws_connections = Arc::clone(&ws_connections);
         if let Ok(msg_a) = rx_market.recv() {
+            tokio::spawn(async move{
             match msg_a {
                 Structs::Last(msg) => {
-                    let db1_market = Arc::clone(&db1_market);
-                    let connection_type_map = Arc::clone(&connection_type_map);
-                    let ws_connections = Arc::clone(&ws_connections);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{ //Last
-                        
-                        
+                  
                             if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_last, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
@@ -7474,18 +7955,10 @@ tokio::task::spawn_blocking({//Market
                                     }
                                 }
                             }   
-                           
-                        
-                    });
-
+              
                 }
                 Structs::MBPEvents(msg) => {
-                    let db1_market = Arc::clone(&db1_market);
-                    let connection_type_map = Arc::clone(&connection_type_map);
-                    let ws_connections = Arc::clone(&ws_connections);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{ // Mbpevent
-                                               
+                                      
                             if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_mbpevent, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
@@ -7540,15 +8013,10 @@ tokio::task::spawn_blocking({//Market
                                 }
                             }  
                         
-                    });
+                   
                 }
                 Structs::InterestEvents(msg) => {
-                    let db1_market = Arc::clone(&db1_market);
-                    let connection_type_map = Arc::clone(&connection_type_map);
-                    let ws_connections = Arc::clone(&ws_connections);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{ // Interestevent
-                       
+                  
                             if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_interestevent, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
@@ -7603,15 +8071,10 @@ tokio::task::spawn_blocking({//Market
                                 }
                             }  
                         
-                    });
+       
                 }
                 Structs::BBO(msg) => {
-                    let db1_market = Arc::clone(&db1_market);
-                    let connection_type_map = Arc::clone(&connection_type_map);
-                    let ws_connections = Arc::clone(&ws_connections);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{ //bbo
-                       
+                 
                             if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_bbo, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
@@ -7666,15 +8129,10 @@ tokio::task::spawn_blocking({//Market
                                 }
                             } 
                         
-                    });
+               
                 }
                 Structs::TimeSale(msg) => {
-                    let db1_market = Arc::clone(&db1_market);
-                    let connection_type_map = Arc::clone(&connection_type_map);
-                    let ws_connections = Arc::clone(&ws_connections);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{ //TNS
-                       
+            
                             if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_tns, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
@@ -7729,15 +8187,10 @@ tokio::task::spawn_blocking({//Market
                                 }
                             }
                         
-                    });
+              
                 }
                 Structs::Volume(msg) => {
-                    let db1_market = Arc::clone(&db1_market);
-                    let connection_type_map = Arc::clone(&connection_type_map);
-                    let ws_connections = Arc::clone(&ws_connections);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{ //volume
-                       
+        
                             if let Err(err) = insert_document_collection(&db1_market.db, &coll_config.coll_h_volume, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
@@ -7792,37 +8245,29 @@ tokio::task::spawn_blocking({//Market
                                 }
                             }  
 
-                    });
+                
                 }
                 Structs::FullOB(msg) => {
-                    let db1_market = Arc::clone(&db1_market);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{ //fullob
-                        
+                   
                             if let Err(err) = overwrite_document(&db1_market.db, &coll_config.coll_fullob, &msg).await {
                                 eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                                 return;  // Continue to the next iteration even if insertion fails
                             }    
                         
-                    });
-                   
+                  
                 }
                 Structs::FullInterest(msg) => {
-                    let db1_market = Arc::clone(&db1_market);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{ //fullinterest
-                        
+                
                         if let Err(err) = overwrite_document(&db1_market.db, &coll_config.coll_fullinterest, &msg).await {
                             eprintln!("DATABASE_INSERTION_FAILURE: {}", err);
                             return;  // Continue to the next iteration even if insertion fails
                         }    
-                        
-                    });
-                   
+                 
                 }
 
                 _ => {} 
             }
+        });
           
         }
     }
@@ -7834,103 +8279,86 @@ tokio::task::spawn_blocking({//Broker
     move || { 
     
     loop {
-       
+        let db1_broker = Arc::clone(&db1_broker);
+        let coll_config = Arc::clone(&coll_config);
         if let Ok(msg_a) = rx_broker.recv() {
+            tokio::spawn(async move{
             match msg_a {
                 Structs::LimitOrder(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                  
+                    
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_lmtorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+                   
                 }
                 Structs::MarketOrder(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                 
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_mktorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+                   
                 }
                 Structs::StopOrder(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                   
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_sorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+                    
                 }
                 Structs::StopLimitOrder(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                  
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_slorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+               
                 }
                 Structs::ModifyOrder(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                   
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modforder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+                    
                 }
                 Structs::DeleteOrder(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                   
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+                   
                 }
                 Structs::TraderOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                 
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_p_order, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+               
                 }
                 Structs::TraderStopOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                 
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_p_sorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+                  
                 }
                 Structs::TraderStopLimitOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_p_slorder, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+               
                 }
                 Structs::DeletedOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                   
                         let order_id = order.order_identifier;
                             match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltd_order, &order).await {
                                 Ok(_) => {},
@@ -7940,12 +8368,10 @@ tokio::task::spawn_blocking({//Broker
                                 Ok(_) => println!("Successfully deleted LimitOrder"),
                                 Err(e) => eprintln!("Failed to delete LimitOrder: {:?}", e),
                             };
-                    });
+                  
                 }
                 Structs::DeletedStopOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+               
                         let order_id = order.order_identifier;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltd_sorder, &order).await {
                             Ok(_) =>{},
@@ -7955,12 +8381,10 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to delete StopOrder: {:?}", e),
                         };
-                    });
+                  
                 }
                 Structs::DeletedStopLimitOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                 
                         let order_id = order.order_identifier;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltd_slorder, &order).await {
                             Ok(_) => {},
@@ -7970,12 +8394,10 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to delete StopOrder: {:?}", e),
                         };
-                    });
+                
                 }
                 Structs::ModifiedOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                  
                         let order_id = order.order_identifier;
                         let order_quant = order.new_order_quantity;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modfd_order, &order).await {
@@ -7986,12 +8408,10 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
-                    });
+               
                 }
                 Structs::ModifiedStopOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                  
                         let order_id = order.order_identifier;
                         let order_quant = order.new_order_quantity;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modfd_sorder, &order).await {
@@ -8002,12 +8422,10 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
-                    });
+               
                 }
                 Structs::ModifiedStopLimitOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                 
                         let order_id = order.order_identifier;
                         let order_quant = order.new_order_quantity;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modfd_slorder, &order).await {
@@ -8018,22 +8436,18 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
-                    });
+                    
                 }
                 Structs::Messaging(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_t_message, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
                         };
-                    });
+                    
                 }
                 Structs::ExecutedStop(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                
                         let order_id = order.order_identifier;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_exctd_sorder, &order).await {
                             Ok(_) => {},
@@ -8043,12 +8457,10 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to delete StopOrder: {:?}", e),
                         };
-                    });
+                    
                 }
                 Structs::ExecutedStopLimit(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                  
                         let order_id = order.order_identifier;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_exctd_slorder, &order).await {
                             Ok(_) => {},
@@ -8058,12 +8470,10 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to delete StopOrder: {:?}", e),
                         };
-                    });
+                   
                 }
                 Structs::MatchStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                  
                         let oid_maker = order.order_identifier_maker;
                             let quant = order.order_quantity;
                             match insert_document_collection(&db1_broker.db, &coll_config.coll_h_match, &order).await {
@@ -8098,22 +8508,18 @@ tokio::task::spawn_blocking({//Broker
                                     Err(e) => eprintln!("Failed to delete limit Order: {:?}", e),
                                 };
                             }
-                    });
+                  
                 }
                 Structs::DeleteIcebergOrder(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+               
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dlticeberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert DeleteIcebergOrder: {:?}", e),
                         };
-                    });
+                 
                 }
                 Structs::DeletedIcebergStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                   
                         let id = order.iceberg_identifier;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_dltd_iceberg, &order).await {
                             Ok(_) => {},
@@ -8123,12 +8529,10 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => println!("Successfully deleted LimitOrder"),
                             Err(e) => eprintln!("Failed to delete LimitOrder: {:?}", e),
                         };
-                    });
+                  
                 }
                 Structs::ExecutedIceberg(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_exctd_iceberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert ExecutedIceberg: {:?}", e),
@@ -8160,22 +8564,18 @@ tokio::task::spawn_blocking({//Broker
                                     Err(e) => eprintln!("Failed to delete iceberg Order: {:?}", e),
                                 };
                             }
-                    });
+                   
                 }
                 Structs::IcebergOrder(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                  
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_iceberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert IcebergOrder: {:?}", e),
                         };
-                    });
+                   
                 }
                 Structs::ModifiedIcebergStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+            
                         let id = order.iceberg_identifier;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modfd_iceberg, &order).await {
                             Ok(_) => {},
@@ -8185,32 +8585,26 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
-                    });
+                 
                 }
                 Structs::ModifyIcebergOrder(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                  
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_modficeberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert ModifyIcebergOrder: {:?}", e),
                         };
-                    });
+                   
                 }
                 Structs::IcebergOrderStruct(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_p_iceberg, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert IcebergOrderStruct: {:?}", e),
                         };
-                    });
+                  
                 }
                 Structs::PositionStruct(position) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+              
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_a_position, &position).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
@@ -8242,12 +8636,11 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
-                    });
+                   
                 }
                 Structs::ClosePositionStruct(position) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                 
+                   
                         let pos_id = position.position_identifier;
                         let pos_quant = position.position_quantity;
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_clsdpos, &position).await {
@@ -8309,12 +8702,10 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
-                    });
+                   
                 }
                 Structs::PostTraderInf(order) => {
-                    let db1_broker = Arc::clone(&db1_broker);
-                    let coll_config = Arc::clone(&coll_config);
-                    tokio::spawn(async move{
+                 
                         match insert_document_collection(&db1_broker.db, &coll_config.coll_h_pnl_no_cmmss, &order).await {
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to insert LimitOrder: {:?}", e),
@@ -8346,12 +8737,12 @@ tokio::task::spawn_blocking({//Broker
                             Ok(_) => {},
                             Err(e) => eprintln!("Failed to modified limitOrder: {:?}", e),
                         };
-                    });
+                   
                 }
 
                 _ => {} 
             }
-           
+        });
           
         } 
     }
@@ -8366,6 +8757,7 @@ tokio::task::spawn_blocking({//Broker
         let coll_config = Arc::clone(&coll_config);
         let market_name = config_clone_http.market_name.clone();
         let bbo_http = Arc::clone(&bbo_http_clone);
+        let last_dyn = Arc::clone(&last_http_clone); 
         let cors = Cors::default()
             
             .allow_any_origin()
@@ -8387,6 +8779,7 @@ tokio::task::spawn_blocking({//Broker
             .app_data(web::Data::new(connection_type_map))
             .app_data(web::Data::new(coll_config))
             .app_data(web::Data::new(bbo_http))
+            .app_data(web::Data::new(last_dyn))
             .route(&format!("/order/limit_order/{market_name}"), web::post().to(limit_order))
             .route(&format!("/order/iceberg_order/{market_name}"), web::post().to(iceberg_order))
             .route(&format!("/order/market_order/{market_name}"), web::post().to(market_order))

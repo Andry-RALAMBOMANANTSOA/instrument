@@ -569,14 +569,14 @@ pub fn trader_info(position: &ClosePositionStruct, config: &MarketConf,tx_broker
 
     match position.position_side {
         OrderSide::Long => {
-            // For long positions, profit is made when closing_price > initial_price
-            let price_diff = position.closing_price  - position.initial_price;
+            // For long positions, profit is made when closing_price > opening_price
+            let price_diff = position.closing_price  - position.opening_price;
             let tick_diff = price_diff / tick_size;
             trader_calcbalance = tick_diff * tick_value * position.position_quantity;
         }
         OrderSide::Short => {
-            // For short positions, profit is made when closing_price < initial_price
-            let price_diff = position.initial_price  - position.closing_price;
+            // For short positions, profit is made when closing_price < opening_price
+            let price_diff = position.opening_price  - position.closing_price;
             let tick_diff = price_diff / tick_size;
             trader_calcbalance = tick_diff * tick_value * position.position_quantity;
         }
@@ -897,6 +897,7 @@ pub fn ex_stop(
     tx_broker: &mpsc::Sender<Structs>,//tx broker
 ) {
     let mut exist = false;
+   
     // Check if there are any order ids at the last_dyn price
     if let Some(order_ids) = stop_map.map.get(&last_dyn.price) {
         // Iterate over each order id
@@ -955,10 +956,12 @@ pub fn ex_stop(
         }
         
     }
+
     if exist {
         stop_map.map.remove(&last_dyn.price);
         exist = false;
     }
+
 }
 pub fn ex_stop2(
     stop_struct: &DashMap<i64, TraderStopOrderStruct>,
@@ -968,6 +971,7 @@ pub fn ex_stop2(
    
 ) {
     let mut exist = false;
+    
     // Check if there are any order ids at the last_dyn price
     if let Some(order_ids) = stop_map.map.get(&last_dyn.price) {
         // Iterate over each order id
@@ -1002,6 +1006,7 @@ pub fn ex_stop2(
         stop_map.map.remove(&last_dyn.price);
         exist = false;
     }
+
 }
 pub fn ex_stop_limit(
     stop_limit_struct: &DashMap<i64, TraderStopLimitOrderStruct>,
@@ -1011,6 +1016,7 @@ pub fn ex_stop_limit(
     tx_broker: &mpsc::Sender<Structs>,//tx broker
 ) {
     let mut exist = false;
+   
     // Check if there are any order ids at the last_dyn price
     if let Some(order_ids) = stop_limit_map.map.get(&last_dyn.price) {
         // Iterate over each order id
@@ -1075,6 +1081,7 @@ pub fn ex_stop_limit(
         stop_limit_map.map.remove(&last_dyn.price);
         exist = false;
     }
+
 }
 
 pub fn ex_stop_limit2(
@@ -1085,6 +1092,7 @@ pub fn ex_stop_limit2(
     
 ) {
     let mut exist = false;
+    
     // Check if there are any order ids at the last_dyn price
     if let Some(order_ids) = stop_limit_map.map.get(&last_dyn.price) {
         // Iterate over each order id
@@ -1120,6 +1128,7 @@ pub fn ex_stop_limit2(
         stop_limit_map.map.remove(&last_dyn.price);
         exist = false;
     }
+
 }
 
 pub fn message_limit_taker(arrival: &LimitOrder, tx_broker:&mpsc::Sender<Structs>, message_string: String) {
@@ -1963,4 +1972,42 @@ pub fn ex_iceberg(iceberg_struct: &mut DashMap<i64, IcebergOrderStruct>,order_id
             .map_err(|err| format!("Failed to query the database: {}", err))?;
     
         Ok(document)
+    }
+
+    pub async fn fetch_all_pendingorder_withorderside_by_trader_id<T>(
+        db: &Database,
+        collection_name: &str,
+        trader_id: i64,
+        order_side:&str,
+    ) -> Result<Vec<T>, String>
+    where
+        T: DeserializeOwned + Unpin + Debug + Send + Sync,
+    {
+        let collection = db.collection::<T>(collection_name);
+    
+        // Create a filter to match all documents with the specified trader_identifier
+        let filter = doc! { "trader_identifier": trader_id, "order_side": order_side  };
+    
+        // Use the find method to retrieve a cursor to the matching documents
+        let mut cursor = collection
+            .find(filter)
+            .await
+            .map_err(|err| format!("Failed to query the database: {}", err))?;
+    
+        // Collect the documents into a vector
+        let mut documents = Vec::new();
+        while let Some(result) = cursor.next().await {
+            match result {
+                Ok(doc) => documents.push(doc),
+                Err(err) => {
+                    return Err(format!("Error reading document from cursor: {}", err));
+                }
+            }
+        }
+    
+        if documents.is_empty() {
+           Ok( vec![])
+        } else {
+            Ok(documents)
+        }
     }
