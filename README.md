@@ -22,6 +22,7 @@ The Instrument (ex: soja_juillet_2025) is owned by the exchange, and all traders
 - **Configurable Market Instances**: Allows multiple instruments to run in parallel using different market configurations defined in JSON files.
 - **Scalable Architecture**: Can be deployed on multiple servers with unified server names using Nginx.
 - **Broker-Based Order Processing**: Traders' orders are processed through brokers, who must pass risk management checks before submitting orders to the exchange.
+- **Pre-Trade risk management**: Before the orders are matched inside the OMS, The users's balances are checked to ensure that they have a sufficient margin along with their existing pending orders to open a position.
 
 ## Configuration
 
