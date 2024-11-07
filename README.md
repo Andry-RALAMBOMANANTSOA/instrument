@@ -89,7 +89,7 @@ WebSocket routes allow real-time data streaming for connected clients:
 
 ### Starting the Server
 
-Ensure you have the required environment variables and market configurations set up in the `.env` file and `marketcg.json` file before running the server.
+Ensure you have the required environment variables and market configurations set up in the `.env` file, `marketcg.json` and others market configuration file before running the server.
 
 ```bash
 cargo run --release
