@@ -1,4 +1,4 @@
-# **Instrument: Agricultural Futures Matching Engine**
+# **Instrument: Futures Matching Engine**
 
 ## Overview
 
@@ -132,7 +132,7 @@ Contributions are welcome! Please open an issue or submit a pull request for any
 
 ## Improvement
 
-The user's balance may be encrypted with AES. This matching engine should include Encryption and Decryption. You also may refactor the code in the main.rs because there are a lot repetition that can be unified in some function.
+The user's balance may be encrypted with AES. This matching engine should include Encryption and Decryption. You also may refactor the code in the main.rs because there are a lot repetition in the code that can be unified with some function.
 
 ## License
 
